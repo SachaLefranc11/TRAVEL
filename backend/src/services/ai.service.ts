@@ -46,36 +46,33 @@ export const AIService = {
   getActivities: async (
     destination: string,
   ): Promise<ActivitySuggestion[]> => {
-    try {
-      // 1. Géolocaliser la destination pour enrichir les coords des activités
-      const coords = await geocodeDestination(destination);
-      const destLat = coords?.lat ?? 48.8566;
-      const destLng = coords?.lng ?? 2.3522;
+    // 1. Géolocaliser la destination pour enrichir les coords des activités
+    const coords = await geocodeDestination(destination);
+    const destLat = coords?.lat ?? 48.8566;
+    const destLng = coords?.lng ?? 2.3522;
 
-      // 2. Demander les activités à Gemini (timeout 20s)
-      const activities = await Promise.race([
-        getActivitiesForDestination(destination),
-        new Promise<ActivitySuggestion[]>((resolve) => setTimeout(() => resolve([]), 20000)),
-      ]);
+    // 2. Demander les activités à Gemini — on laisse remonter les erreurs
+    const activities = await Promise.race([
+      getActivitiesForDestination(destination),
+      new Promise<ActivitySuggestion[]>((_resolve, reject) =>
+        setTimeout(() => reject(new Error('TIMEOUT: Gemini a mis trop de temps à répondre (>20s)')), 20000)
+      ),
+    ]);
 
-      if (activities.length === 0) return [];
+    if (activities.length === 0) return [];
 
-      // 3. Enrichir les coordonnées via Overpass (timeout 15s)
-      const enriched = await Promise.race([
-        enrichWithCoordinates(activities, destLat, destLng),
-        new Promise<ActivitySuggestion[]>((resolve) =>
-          setTimeout(() => resolve(activities.map((a) => ({
-            ...a,
-            lat: destLat + (Math.random() - 0.5) * 0.04,
-            lng: destLng + (Math.random() - 0.5) * 0.04,
-          }))), 15000)
-        ),
-      ]);
+    // 3. Enrichir les coordonnées via Overpass (timeout silencieux)
+    const enriched = await Promise.race([
+      enrichWithCoordinates(activities, destLat, destLng),
+      new Promise<ActivitySuggestion[]>((resolve) =>
+        setTimeout(() => resolve(activities.map((a) => ({
+          ...a,
+          lat: destLat + (Math.random() - 0.5) * 0.04,
+          lng: destLng + (Math.random() - 0.5) * 0.04,
+        }))), 15000)
+      ),
+    ]);
 
-      return enriched;
-    } catch (err: any) {
-      console.error('[AIService] getActivities error:', err?.message);
-      return [];
-    }
+    return enriched;
   },
 };

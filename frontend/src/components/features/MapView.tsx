@@ -166,8 +166,12 @@ export const MapView = ({ locations, destination, onAdd, onDelete, canEdit }: Pr
           });
         }
       });
-    } catch {
-      setAiError('Erreur lors du chargement des suggestions IA');
+    } catch (err: any) {
+      const msg: string =
+        err?.response?.data?.error ??
+        err?.message ??
+        'Erreur lors du chargement des suggestions IA';
+      setAiError(msg);
     } finally {
       setLoadingAI(false);
     }

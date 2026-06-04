@@ -39,8 +39,23 @@ export const getActivities = async (req: Request, res: Response) => {
     res.status(400).json({ error: 'Paramètre dest requis' });
     return;
   }
-  const activities = await AIService.getActivities(dest.trim());
-  res.json({ destination: dest.trim(), activities });
+  try {
+    const activities = await AIService.getActivities(dest.trim());
+    res.json({ destination: dest.trim(), activities });
+  } catch (err: any) {
+    const msg: string = err?.message ?? 'Erreur inconnue';
+    console.error('[getActivities]', msg);
+
+    if (msg.includes('QUOTA_EXCEEDED')) {
+      res.status(429).json({ error: 'Quota Gemini dépassé. Vérifie ta clé API sur aistudio.google.com' });
+    } else if (msg.includes('INVALID_KEY')) {
+      res.status(401).json({ error: 'Clé API Gemini invalide. Vérifie ton fichier .env' });
+    } else if (msg.includes('TIMEOUT')) {
+      res.status(504).json({ error: 'Gemini a mis trop de temps à répondre. Réessaie.' });
+    } else {
+      res.status(500).json({ error: `Erreur Gemini : ${msg}` });
+    }
+  }
 };
 
 /** POST /api/trips/:id/image — upload image locale */

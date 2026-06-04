@@ -45,7 +45,8 @@ export const getActivitiesForDestination = async (
 
   try {
     const genAI = new GoogleGenerativeAI(KEY);
-    const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' });
+    // gemini-2.0-flash en priorité, fallback sur gemini-1.5-flash
+    const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
 
     const prompt = `Tu es un expert en voyages. Pour la destination "${destination}", génère une liste de 8 lieux incontournables à visiter (attractions, restaurants, activités, monuments, parcs).
 
@@ -83,7 +84,16 @@ Règles :
       category: inferCategory(item.category) as ActivitySuggestion['category'],
     }));
   } catch (err: any) {
-    console.error('[Gemini] Erreur:', err?.message ?? err);
-    return [];
+    const msg: string = err?.message ?? String(err);
+    console.error('[Gemini] Erreur:', msg);
+
+    // Remonter des erreurs lisibles selon le code HTTP
+    if (msg.includes('429') || msg.includes('quota') || msg.includes('Quota')) {
+      throw new Error('QUOTA_EXCEEDED: Quota Gemini dépassé. Vérifie ta clé API sur aistudio.google.com');
+    }
+    if (msg.includes('400') || msg.includes('API_KEY') || msg.includes('invalid')) {
+      throw new Error('INVALID_KEY: Clé API Gemini invalide');
+    }
+    throw new Error(`GEMINI_ERROR: ${msg}`);
   }
 };
