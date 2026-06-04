@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Plus, Plane, TrendingUp, MapPin } from 'lucide-react';
 import { tripsService } from '../../services/trips.service';
+import { aiService } from '../../services/ai.service';
 import { TripCard } from '../../components/features/TripCard';
 import { Button } from '../../components/ui/Button';
 import { Modal } from '../../components/ui/Modal';
@@ -14,22 +15,44 @@ export const DashboardPage = () => {
   const qc = useQueryClient();
   const [showCreate, setShowCreate] = useState(false);
 
-  const { data: trips = [], isLoading } = useQuery({ queryKey: ['trips'], queryFn: tripsService.getAll });
+  const { data: trips = [], isLoading } = useQuery({
+    queryKey: ['trips'],
+    queryFn: tripsService.getAll,
+  });
 
   const createMutation = useMutation({
-    mutationFn: (data: Partial<Trip>) => tripsService.create(data),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['trips'] }); setShowCreate(false); },
+    mutationFn: async (formData: Partial<Trip> & { _imageFile?: File }) => {
+      const { _imageFile, ...data } = formData;
+      // 1. Créer le voyage
+      const trip = await tripsService.create(data);
+      // 2. Si une image locale a été sélectionnée, l'uploader
+      if (_imageFile) {
+        try {
+          await aiService.uploadTripImage(trip.id, _imageFile);
+        } catch (err) {
+          console.warn('Upload image échoué, on continue', err);
+        }
+      }
+      return trip;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['trips'] });
+      setShowCreate(false);
+    },
   });
 
   const upcoming = trips.filter(t => new Date(t.endDate) >= new Date());
-  const totalExpenses = trips.reduce((sum, t) => sum + (t.expenses?.reduce((s, e) => s + e.amount, 0) ?? 0), 0);
+  const totalExpenses = trips.reduce((sum, t) =>
+    sum + (t.expenses?.reduce((s, e) => s + e.amount, 0) ?? 0), 0);
 
   return (
     <>
       <div className="space-y-8">
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-2xl font-bold text-gray-900">Bonjour, {user?.name?.split(' ')[0]} 👋</h1>
+            <h1 className="text-2xl font-bold text-gray-900">
+              Bonjour, {user?.name?.split(' ')[0]} 👋
+            </h1>
             <p className="text-gray-500 mt-1">Gérez vos aventures</p>
           </div>
           <Button icon={<Plus size={16} />} onClick={() => setShowCreate(true)}>
@@ -66,9 +89,9 @@ export const DashboardPage = () => {
         </div>
       </div>
 
-      <Modal isOpen={showCreate} onClose={() => setShowCreate(false)} title="Nouveau voyage">
+      <Modal isOpen={showCreate} onClose={() => setShowCreate(false)} title="Nouveau voyage" size="lg">
         <TripForm
-          onSubmit={(data) => createMutation.mutate(data)}
+          onSubmit={(data) => createMutation.mutate(data as any)}
           onCancel={() => setShowCreate(false)}
           isLoading={createMutation.isPending}
           error={createMutation.error ? 'Erreur lors de la création' : undefined}
@@ -84,7 +107,9 @@ const colorMap = {
   orange: 'bg-orange-50 text-orange-600',
 };
 
-const StatCard = ({ icon, label, value, color }: { icon: React.ReactNode; label: string; value: string | number; color: 'blue' | 'green' | 'orange' }) => (
+const StatCard = ({ icon, label, value, color }: {
+  icon: React.ReactNode; label: string; value: string | number; color: 'blue' | 'green' | 'orange'
+}) => (
   <div className="card flex items-center gap-4">
     <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${colorMap[color]}`}>
       {icon}
