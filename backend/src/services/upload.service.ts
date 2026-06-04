@@ -1,38 +1,65 @@
 import multer from 'multer';
-import path from 'path';
-import fs from 'fs';
+import { v2 as cloudinary } from 'cloudinary';
 import { ALLOWED_MIME_TYPES, MAX_FILE_SIZE_BYTES } from '../dtos/image.dto';
 
-const uploadsDir = path.resolve(process.env.UPLOAD_DIR || 'uploads');
-if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir, { recursive: true });
-
-const storage = multer.diskStorage({
-  destination: (_req, _file, cb) => cb(null, uploadsDir),
-  filename: (_req, file, cb) => {
-    const unique = `${Date.now()}-${Math.round(Math.random() * 1e9)}`;
-    const ext = path.extname(file.originalname).toLowerCase();
-    cb(null, `trip-${unique}${ext}`);
-  },
+// Configuration Cloudinary
+cloudinary.config({
+  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+  api_key: process.env.CLOUDINARY_API_KEY,
+  api_secret: process.env.CLOUDINARY_API_SECRET,
+  secure: true,
 });
 
+// Multer en mémoire (buffer) — Cloudinary reçoit le buffer directement
 export const upload = multer({
-  storage,
+  storage: multer.memoryStorage(),
   limits: { fileSize: MAX_FILE_SIZE_BYTES },
   fileFilter: (_req, file, cb) => {
     if (ALLOWED_MIME_TYPES.includes(file.mimetype)) {
       cb(null, true);
     } else {
-      cb(new Error(`Format non supporté. Acceptés : jpeg, png, webp`));
+      cb(new Error('Format non supporté. Acceptés : jpeg, png, webp'));
     }
   },
 });
 
-export const getPublicUrl = (filename: string): string =>
-  `/uploads/${filename}`;
+/**
+ * Upload un buffer vers Cloudinary et retourne l'URL sécurisée.
+ */
+export const uploadToCloudinary = (
+  buffer: Buffer,
+  mimetype: string,
+): Promise<string> => {
+  return new Promise((resolve, reject) => {
+    const ext = mimetype.split('/')[1] ?? 'jpg';
+    const uploadStream = cloudinary.uploader.upload_stream(
+      {
+        folder: 'travel-app',
+        resource_type: 'image',
+        format: ext,
+        transformation: [{ width: 1200, height: 600, crop: 'fill', quality: 'auto' }],
+      },
+      (error, result) => {
+        if (error || !result) return reject(error ?? new Error('Upload Cloudinary échoué'));
+        resolve(result.secure_url);
+      },
+    );
+    uploadStream.end(buffer);
+  });
+};
 
-export const deleteFile = (filename: string): void => {
-  const filePath = path.join(uploadsDir, filename);
-  if (fs.existsSync(filePath)) {
-    try { fs.unlinkSync(filePath); } catch { /* ignore */ }
+/**
+ * Supprime une image Cloudinary depuis son URL publique.
+ */
+export const deleteFromCloudinary = async (url: string): Promise<void> => {
+  try {
+    // Extrait le public_id depuis l'URL Cloudinary
+    const parts = url.split('/');
+    const filename = parts[parts.length - 1].split('.')[0];
+    const folder = parts[parts.length - 2];
+    const publicId = folder === 'travel-app' ? `travel-app/${filename}` : filename;
+    await cloudinary.uploader.destroy(publicId);
+  } catch (err) {
+    console.warn('[Cloudinary] Suppression échouée:', err);
   }
 };
