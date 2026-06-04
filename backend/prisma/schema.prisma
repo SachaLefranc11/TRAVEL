@@ -1,0 +1,71 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           String            @id @default(cuid())
+  email        String            @unique
+  name         String
+  password     String
+  avatar       String?
+  createdAt    DateTime          @default(now())
+  trips        TripParticipant[]
+  expenses     Expense[]
+}
+
+model Trip {
+  id           String            @id @default(cuid())
+  title        String
+  destination  String
+  coverImage   String?
+  startDate    DateTime
+  endDate      DateTime
+  description  String?
+  createdAt    DateTime          @default(now())
+  ownerId      String
+  participants TripParticipant[]
+  expenses     Expense[]
+  locations    Location[]
+}
+
+model TripParticipant {
+  id     String @id @default(cuid())
+  userId String
+  tripId String
+  role   String @default("MEMBER")
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  trip   Trip   @relation(fields: [tripId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, tripId])
+}
+
+model Expense {
+  id        String   @id @default(cuid())
+  title     String
+  amount    Float
+  currency  String   @default("EUR")
+  category  String
+  date      DateTime
+  notes     String?
+  paidById  String
+  tripId    String
+  paidBy    User     @relation(fields: [paidById], references: [id])
+  trip      Trip     @relation(fields: [tripId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+}
+
+model Location {
+  id          String  @id @default(cuid())
+  tripId      String
+  name        String
+  type        String
+  lat         Float
+  lng         Float
+  description String?
+  trip        Trip    @relation(fields: [tripId], references: [id], onDelete: Cascade)
+}
