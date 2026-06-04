@@ -71,10 +71,11 @@ export const MapView = ({ locations, destination, onAdd, onDelete, canEdit }: Pr
       const marker = L.marker([loc.lat, loc.lng], { icon })
         .addTo(map)
         .bindPopup(`
-          <div style="min-width:150px">
-            <b style="font-size:14px">${loc.name}</b><br>
-            <span style="color:#888;font-size:12px">${TYPE_LABELS[loc.type as LocationType] ?? loc.type}</span>
-            ${loc.description ? `<p style="margin:4px 0 0;font-size:12px;color:#444">${loc.description}</p>` : ''}
+          <div style="min-width:180px;max-width:260px">
+            <b style="font-size:14px;display:block;margin-bottom:2px">${loc.name}</b>
+            <span style="color:#666;font-size:11px;font-weight:500;text-transform:uppercase;letter-spacing:.5px">${TYPE_LABELS[loc.type as LocationType] ?? loc.type}</span>
+            ${loc.description ? `<p style="margin:6px 0 0;font-size:12px;color:#444;line-height:1.4">${loc.description}</p>` : ''}
+            ${(loc as any).address ? `<p style="margin:5px 0 0;font-size:11px;color:#888;display:flex;align-items:flex-start;gap:3px"><span>📍</span><span>${(loc as any).address}</span></p>` : ''}
           </div>
         `);
       markersRef.current.push(marker);
@@ -163,7 +164,8 @@ export const MapView = ({ locations, destination, onAdd, onDelete, canEdit }: Pr
             lat: act.lat,
             lng: act.lng,
             description: act.description,
-          });
+            address: act.address,
+          } as any);
         }
       });
     } catch (err: any) {
@@ -232,6 +234,11 @@ export const MapView = ({ locations, destination, onAdd, onDelete, canEdit }: Pr
                 <p className="text-sm font-medium text-gray-900 truncate">{loc.name}</p>
                 <p className="text-xs text-gray-500">{TYPE_LABELS[loc.type as LocationType] ?? loc.type}</p>
                 {loc.description && <p className="text-xs text-gray-400 mt-0.5 truncate">{loc.description}</p>}
+                {(loc as any).address && (
+                  <p className="text-xs text-gray-400 mt-0.5 truncate flex items-center gap-1">
+                    <MapPin size={10} className="flex-shrink-0" />{(loc as any).address}
+                  </p>
+                )}
               </div>
               {canEdit && onDelete && (
                 <button

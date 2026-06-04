@@ -19,9 +19,9 @@ export const createLocation = async (req: AuthRequest, res: Response) => {
   if (!(await isMember(tripId, req.userId!))) {
     res.status(403).json({ error: 'Access denied' }); return;
   }
-  const { name, type, lat, lng, description } = req.body;
+  const { name, type, lat, lng, description, address } = req.body;
   const location = await prisma.location.create({
-    data: { name, type, lat, lng, description, tripId },
+    data: { name, type, lat, lng, description, address, tripId },
   });
   res.status(201).json(location);
 };

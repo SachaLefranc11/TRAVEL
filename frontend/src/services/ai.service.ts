@@ -3,6 +3,7 @@ import api from './api';
 export interface ActivitySuggestion {
   name: string;
   description: string;
+  address?: string;
   category: 'ATTRACTION' | 'RESTAURANT' | 'HOTEL' | 'ACTIVITY' | 'OTHER';
   lat?: number;
   lng?: number;

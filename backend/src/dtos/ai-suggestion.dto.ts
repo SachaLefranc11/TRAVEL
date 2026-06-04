@@ -3,6 +3,7 @@ import { z } from 'zod';
 export const ActivitySuggestionDTO = z.object({
   name: z.string(),
   description: z.string(),
+  address: z.string().optional(),
   category: z.enum(['ATTRACTION', 'RESTAURANT', 'HOTEL', 'ACTIVITY', 'OTHER']),
   lat: z.number().optional(),
   lng: z.number().optional(),

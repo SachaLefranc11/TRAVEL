@@ -54,23 +54,29 @@ export const getActivitiesForDestination = async (
       },
       {
         role: 'user',
-        content: `Pour la destination "${destination}", génère une liste de 8 lieux incontournables à visiter (attractions, restaurants, activités, monuments, parcs).
+        content: `Pour la destination "${destination}", génère une liste de 15 lieux incontournables à visiter (attractions, restaurants, activités, monuments, parcs, musées).
 
 Réponds UNIQUEMENT avec ce tableau JSON, rien d'autre :
 [
   {
     "name": "Nom officiel du lieu",
     "description": "Description courte en 1-2 phrases en français",
+    "address": "Adresse complète et précise (numéro, rue, code postal, ville)",
     "category": "ATTRACTION"
   }
 ]
 
-Valeurs possibles pour category : ATTRACTION, RESTAURANT, HOTEL, ACTIVITY, OTHER
-Mélange les catégories. Utilise les vrais noms officiels des lieux.`,
+Règles strictes :
+- Exactement 15 lieux
+- Valeurs pour category : ATTRACTION, RESTAURANT, HOTEL, ACTIVITY, OTHER
+- Mélange bien les catégories (pas que des attractions)
+- Noms officiels réels des lieux
+- Adresses complètes et précises (ex: "1 Chome-2-3 Omotesando, Shibuya, Tokyo 150-0001, Japon")
+- Descriptions en français, informatives et précises`,
       },
     ],
     temperature: 0.7,
-    max_tokens: 1500,
+    max_tokens: 3000,
   });
 
   const text = completion.choices[0]?.message?.content?.trim() ?? '';
@@ -84,12 +90,13 @@ Mélange les catégories. Utilise les vrais noms officiels des lieux.`,
     throw new Error('GROQ_ERROR: Réponse non-JSON reçue de Groq');
   }
 
-  const parsed: Array<{ name: string; description: string; category: string }> =
+  const parsed: Array<{ name: string; description: string; address?: string; category: string }> =
     JSON.parse(jsonMatch[0]);
 
   return parsed.map((item) => ({
     name: item.name,
     description: item.description,
+    address: item.address ?? undefined,
     category: inferCategory(item.category) as ActivitySuggestion['category'],
   }));
 };

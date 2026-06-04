@@ -56,6 +56,7 @@ export interface Location {
   lat: number;
   lng: number;
   description?: string;
+  address?: string;
 }
 
 export interface AuthResponse {

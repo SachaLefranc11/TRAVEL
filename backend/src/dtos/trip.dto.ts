@@ -16,7 +16,8 @@ export const CreateLocationDTO = z.object({
   type: z.enum(['ATTRACTION', 'RESTAURANT', 'HOTEL', 'ACTIVITY', 'OTHER']),
   lat: z.number().min(-90).max(90),
   lng: z.number().min(-180).max(180),
-  description: z.string().max(300).optional(),
+  description: z.string().max(500).optional(),
+  address: z.string().max(300).optional(),
 });
 
 export type CreateTripInput = z.infer<typeof CreateTripDTO>;
