@@ -46,14 +46,16 @@ export const getActivities = async (req: Request, res: Response) => {
     const msg: string = err?.message ?? 'Erreur inconnue';
     console.error('[getActivities]', msg);
 
-    if (msg.includes('QUOTA_EXCEEDED')) {
-      res.status(429).json({ error: 'Quota Gemini dépassé. Vérifie ta clé API sur aistudio.google.com' });
-    } else if (msg.includes('INVALID_KEY')) {
-      res.status(401).json({ error: 'Clé API Gemini invalide. Vérifie ton fichier .env' });
+    if (msg.includes('INVALID_KEY')) {
+      res.status(401).json({ error: 'Clé GROQ_API_KEY manquante ou invalide. Ajoute-la dans le fichier .env (console.groq.com)' });
     } else if (msg.includes('TIMEOUT')) {
-      res.status(504).json({ error: 'Gemini a mis trop de temps à répondre. Réessaie.' });
+      res.status(504).json({ error: 'Groq a mis trop de temps à répondre. Réessaie.' });
+    } else if (msg.includes('401') || msg.includes('403')) {
+      res.status(401).json({ error: 'Clé Groq invalide ou expirée. Vérifie sur console.groq.com' });
+    } else if (msg.includes('429')) {
+      res.status(429).json({ error: 'Limite de requêtes Groq atteinte. Réessaie dans quelques secondes.' });
     } else {
-      res.status(500).json({ error: `Erreur Gemini : ${msg}` });
+      res.status(500).json({ error: `Erreur IA : ${msg}` });
     }
   }
 };

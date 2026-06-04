@@ -1,7 +1,7 @@
-import { GoogleGenerativeAI } from '@google/generative-ai';
+import Groq from 'groq-sdk';
 import { ActivitySuggestion } from '../dtos/ai-suggestion.dto';
 
-const KEY = process.env.GOOGLE_AI_API_KEY;
+const KEY = process.env.GROQ_API_KEY;
 
 const CATEGORY_MAP: Record<string, ActivitySuggestion['category']> = {
   monument: 'ATTRACTION',
@@ -13,14 +13,15 @@ const CATEGORY_MAP: Record<string, ActivitySuggestion['category']> = {
   activité: 'ACTIVITY',
   activity: 'ACTIVITY',
   sport: 'ACTIVITY',
-  restaurant: 'RESTAURANT',
-  café: 'RESTAURANT',
-  cafe: 'RESTAURANT',
-  hôtel: 'HOTEL',
-  hotel: 'HOTEL',
   nature: 'ACTIVITY',
   plage: 'ACTIVITY',
   beach: 'ACTIVITY',
+  restaurant: 'RESTAURANT',
+  café: 'RESTAURANT',
+  cafe: 'RESTAURANT',
+  bar: 'RESTAURANT',
+  hôtel: 'HOTEL',
+  hotel: 'HOTEL',
 };
 
 const inferCategory = (raw: string): ActivitySuggestion['category'] => {
@@ -32,68 +33,63 @@ const inferCategory = (raw: string): ActivitySuggestion['category'] => {
 };
 
 /**
- * Utilise Google Gemini Flash pour générer une liste d'activités/lieux
+ * Utilise Groq (Llama 3.3 70B) pour générer une liste d'activités/lieux
  * incontournables pour une destination donnée.
  */
 export const getActivitiesForDestination = async (
   destination: string,
 ): Promise<ActivitySuggestion[]> => {
-  if (!KEY) {
-    console.warn('[Gemini] GOOGLE_AI_API_KEY manquant');
-    return [];
+  if (!KEY || KEY.startsWith('PLACEHOLDER')) {
+    throw new Error('INVALID_KEY: Clé GROQ_API_KEY manquante dans le fichier .env');
   }
 
-  try {
-    const genAI = new GoogleGenerativeAI(KEY);
-    // gemini-2.0-flash en priorité, fallback sur gemini-1.5-flash
-    const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
+  const groq = new Groq({ apiKey: KEY });
 
-    const prompt = `Tu es un expert en voyages. Pour la destination "${destination}", génère une liste de 8 lieux incontournables à visiter (attractions, restaurants, activités, monuments, parcs).
+  const completion = await groq.chat.completions.create({
+    model: 'llama-3.3-70b-versatile',
+    messages: [
+      {
+        role: 'system',
+        content: 'Tu es un expert en voyages. Réponds UNIQUEMENT avec du JSON valide, sans markdown ni explication.',
+      },
+      {
+        role: 'user',
+        content: `Pour la destination "${destination}", génère une liste de 8 lieux incontournables à visiter (attractions, restaurants, activités, monuments, parcs).
 
-Réponds UNIQUEMENT avec un tableau JSON valide, sans markdown, sans explication. Format exact :
+Réponds UNIQUEMENT avec ce tableau JSON, rien d'autre :
 [
   {
-    "name": "Nom du lieu",
-    "description": "Description courte en 1-2 phrases",
-    "category": "ATTRACTION | RESTAURANT | HOTEL | ACTIVITY | OTHER"
+    "name": "Nom officiel du lieu",
+    "description": "Description courte en 1-2 phrases en français",
+    "category": "ATTRACTION"
   }
 ]
 
-Règles :
-- Les noms doivent être les vrais noms officiels des lieux
-- Mélange les catégories (pas que des attractions)
-- Descriptions en français, courtes et précises
-- Uniquement du JSON valide, rien d'autre`;
+Valeurs possibles pour category : ATTRACTION, RESTAURANT, HOTEL, ACTIVITY, OTHER
+Mélange les catégories. Utilise les vrais noms officiels des lieux.`,
+      },
+    ],
+    temperature: 0.7,
+    max_tokens: 1500,
+  });
 
-    const result = await model.generateContent(prompt);
-    const text = result.response.text().trim();
+  const text = completion.choices[0]?.message?.content?.trim() ?? '';
 
-    // Nettoyage robuste : extraire le JSON même si Gemini ajoute du texte
-    const jsonMatch = text.match(/\[[\s\S]*\]/);
-    if (!jsonMatch) {
-      console.error('[Gemini] Réponse non-JSON:', text.slice(0, 200));
-      return [];
-    }
+  if (!text) throw new Error('GROQ_ERROR: Réponse vide de Groq');
 
-    const parsed: Array<{ name: string; description: string; category: string }> =
-      JSON.parse(jsonMatch[0]);
-
-    return parsed.map((item) => ({
-      name: item.name,
-      description: item.description,
-      category: inferCategory(item.category) as ActivitySuggestion['category'],
-    }));
-  } catch (err: any) {
-    const msg: string = err?.message ?? String(err);
-    console.error('[Gemini] Erreur:', msg);
-
-    // Remonter des erreurs lisibles selon le code HTTP
-    if (msg.includes('429') || msg.includes('quota') || msg.includes('Quota')) {
-      throw new Error('QUOTA_EXCEEDED: Quota Gemini dépassé. Vérifie ta clé API sur aistudio.google.com');
-    }
-    if (msg.includes('400') || msg.includes('API_KEY') || msg.includes('invalid')) {
-      throw new Error('INVALID_KEY: Clé API Gemini invalide');
-    }
-    throw new Error(`GEMINI_ERROR: ${msg}`);
+  // Extraction robuste du JSON (même si Groq ajoute du texte)
+  const jsonMatch = text.match(/\[[\s\S]*\]/);
+  if (!jsonMatch) {
+    console.error('[Groq] Réponse non-JSON:', text.slice(0, 300));
+    throw new Error('GROQ_ERROR: Réponse non-JSON reçue de Groq');
   }
+
+  const parsed: Array<{ name: string; description: string; category: string }> =
+    JSON.parse(jsonMatch[0]);
+
+  return parsed.map((item) => ({
+    name: item.name,
+    description: item.description,
+    category: inferCategory(item.category) as ActivitySuggestion['category'],
+  }));
 };
