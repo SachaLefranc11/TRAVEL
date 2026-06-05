@@ -51,6 +51,12 @@ export const LoginPage = () => {
             <Input label="Email" type="email" placeholder="vous@example.com" {...register('email')} error={errors.email?.message} />
             <Input label="Mot de passe" type="password" placeholder="••••••••" {...register('password')} error={errors.password?.message} />
 
+            <div className="flex justify-end -mt-1">
+              <Link to="/forgot-password" className="text-sm text-primary-600 hover:underline">
+                Mot de passe oublié ?
+              </Link>
+            </div>
+
             {apiError && <p className="text-sm text-red-600 bg-red-50 p-3 rounded-lg">{apiError}</p>}
 
             <Button type="submit" loading={isSubmitting} className="w-full justify-center py-3">
