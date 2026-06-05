@@ -11,25 +11,29 @@ interface Props {
 
 const sizes = { sm: 'max-w-sm', md: 'max-w-md', lg: 'max-w-2xl' };
 
-// Injecte une règle CSS globale une seule fois
-const injectMapBlockStyle = () => {
-  if (document.getElementById('modal-map-block')) return;
-  const style = document.createElement('style');
-  style.id = 'modal-map-block';
-  style.textContent = '.modal-open .leaflet-container { pointer-events: none !important; }';
-  document.head.appendChild(style);
+/** Force tous les conteneurs Leaflet à passer derrière le modal */
+const setLeafletBehind = (behind: boolean) => {
+  const containers = document.querySelectorAll<HTMLElement>('.leaflet-container');
+  containers.forEach(el => {
+    el.style.zIndex       = behind ? '-1'   : '';
+    el.style.pointerEvents = behind ? 'none' : '';
+  });
+  // Aussi les panes internes de Leaflet
+  const panes = document.querySelectorAll<HTMLElement>('.leaflet-pane, .leaflet-control-container');
+  panes.forEach(el => {
+    el.style.zIndex = behind ? '-1' : '';
+  });
 };
 
 export const Modal = ({ isOpen, onClose, title, children, size = 'md' }: Props) => {
   useEffect(() => {
-    injectMapBlockStyle();
     if (isOpen) {
       document.body.style.overflow = 'hidden';
-      document.body.classList.add('modal-open');
+      setLeafletBehind(true);
     }
     return () => {
       document.body.style.overflow = '';
-      document.body.classList.remove('modal-open');
+      setLeafletBehind(false);
     };
   }, [isOpen]);
 
@@ -39,7 +43,6 @@ export const Modal = ({ isOpen, onClose, title, children, size = 'md' }: Props) 
     <div
       className="fixed inset-0 flex items-center justify-center p-4"
       style={{ zIndex: 2000 }}
-      // Stoppe la propagation vers la carte en dessous
       onMouseDown={e => e.stopPropagation()}
       onClick={e => e.stopPropagation()}
     >
