@@ -16,6 +16,22 @@ model User {
   createdAt    DateTime          @default(now())
   trips        TripParticipant[]
   expenses     Expense[]
+  resetTokens  PasswordResetToken[]
+}
+
+// Jetons de réinitialisation de mot de passe.
+// On stocke un HASH du jeton (jamais le jeton en clair) ; le jeton brut n'existe
+// que dans l'email envoyé à l'utilisateur. Expiration courte + usage unique.
+model PasswordResetToken {
+  id        String    @id @default(cuid())
+  tokenHash String    @unique
+  userId    String
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
 }
 
 model Trip {
