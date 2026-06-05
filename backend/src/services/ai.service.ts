@@ -72,17 +72,19 @@ export const AIService = {
     const destLat = coords?.lat ?? 48.8566;
     const destLng = coords?.lng ?? 2.3522;
 
-    // ── 3. Enrichissement coordonnées (parallèle) ─────────────────────
+    // ── 3. Enrichissement coordonnées ─────────────────────────────────
+    // En cas de dépassement de délai, on retombe sur les coords de l'IA si
+    // présentes, sinon sur le centre de la destination (jamais aléatoire).
     const enriched = await Promise.race([
       enrichWithCoordinates(activities, destLat, destLng),
       new Promise<ActivitySuggestion[]>((resolve) =>
         setTimeout(() => resolve(
           activities.map((a) => ({
             ...a,
-            lat: destLat + (Math.random() - 0.5) * 0.04,
-            lng: destLng + (Math.random() - 0.5) * 0.04,
+            lat: a.lat ?? destLat,
+            lng: a.lng ?? destLng,
           }))
-        ), 20000)
+        ), 25000)
       ),
     ]);
 
