@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom';
 import { Calendar, MapPin, Users, DollarSign } from 'lucide-react';
 import { Trip } from '../../types';
+import { resolveCoverImage } from '../../utils/imageUrl';
 
 const COVER_FALLBACKS = [
   'https://images.unsplash.com/photo-1488646953014-85cb44e25828?w=400&h=200&fit=crop',
@@ -18,7 +19,7 @@ const getDuration = (start: string, end: string) => {
 interface Props { trip: Trip; index?: number; }
 
 export const TripCard = ({ trip, index = 0 }: Props) => {
-  const cover = trip.coverImage || COVER_FALLBACKS[index % COVER_FALLBACKS.length];
+  const cover = resolveCoverImage(trip.coverImage) || COVER_FALLBACKS[index % COVER_FALLBACKS.length];
   const totalExpenses = trip.expenses?.reduce((s, e) => s + e.amount, 0) ?? 0;
 
   return (

@@ -12,6 +12,7 @@ import { ExpenseChart } from '../../components/features/ExpenseChart';
 import { ExpenseForm } from '../../components/features/ExpenseForm';
 import { Badge } from '../../components/ui/Badge';
 import { useAuth } from '../../contexts/AuthContext';
+import { resolveCoverImage } from '../../utils/imageUrl';
 import { Expense, Location, Trip } from '../../types';
 
 const formatDate = (d: string) =>
@@ -94,9 +95,8 @@ export const TripDetailPage = () => {
   const isOwner = trip.ownerId === user?.id;
   const totalExpenses = trip.expenses?.reduce((s, e) => s + e.amount, 0) ?? 0;
 
-  const coverSrc = trip.coverImage?.startsWith('/uploads/')
-    ? `http://localhost:3001${trip.coverImage}`
-    : (trip.coverImage || 'https://images.unsplash.com/photo-1488646953014-85cb44e25828?w=800&h=300&fit=crop');
+  const coverSrc = resolveCoverImage(trip.coverImage)
+    || 'https://images.unsplash.com/photo-1488646953014-85cb44e25828?w=800&h=300&fit=crop';
 
   return (
     <>
