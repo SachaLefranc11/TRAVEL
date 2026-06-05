@@ -2,15 +2,26 @@ import axios from 'axios';
 import { GeocodeResponse, ActivitySuggestion } from '../dtos/ai-suggestion.dto';
 
 const NOMINATIM = 'https://nominatim.openstreetmap.org';
-const OVERPASS  = 'https://overpass-api.de/api/interpreter';
 const HEADERS   = { 'User-Agent': 'TravelApp/1.0 (contact@travel-app.dev)' };
 
-/** Géocode un texte libre via Nominatim. Retourne null si introuvable. */
-const nominatimSearch = async (q: string): Promise<{ lat: number; lng: number } | null> => {
+/**
+ * Géocode un texte libre via Nominatim. Retourne null si introuvable.
+ * `viewbox` (optionnel) biaise/limite la recherche autour de la destination
+ * pour éviter qu'un nom commun renvoie un lieu à l'autre bout du monde.
+ */
+const nominatimSearch = async (
+  q: string,
+  viewbox?: string,
+): Promise<{ lat: number; lng: number } | null> => {
   try {
     const { data } = await axios.get(`${NOMINATIM}/search`, {
       headers: HEADERS,
-      params: { q, format: 'json', limit: 1 },
+      params: {
+        q,
+        format: 'json',
+        limit: 1,
+        ...(viewbox ? { viewbox, bounded: 1 } : {}),
+      },
       timeout: 5000,
     });
     if (!data?.length) return null;
@@ -42,62 +53,60 @@ export const geocodeDestination = async (destination: string): Promise<GeocodeRe
   }
 };
 
+/** Coordonnées valides ET proches du centre de la destination (~150 km). */
+const isNearDestination = (
+  lat: number | undefined,
+  lng: number | undefined,
+  destLat: number,
+  destLng: number,
+): lat is number => {
+  if (typeof lat !== 'number' || typeof lng !== 'number') return false;
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) return false;
+  if (lat === 0 && lng === 0) return false;
+  return Math.abs(lat - destLat) < 1.5 && Math.abs(lng - destLng) < 1.5;
+};
+
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
 /**
- * Enrichit les activités avec des coordonnées GPS.
- * Toutes les requêtes se font EN PARALLÈLE (max 5 à la fois) pour éviter 17s d'attente.
+ * Garantit des coordonnées GPS pour chaque activité.
+ *
+ * 1. Les coordonnées fournies par l'IA, si elles sont plausibles (proches de la
+ *    destination), sont conservées telles quelles → aucun appel réseau.
+ * 2. Sinon, géocodage Nominatim (adresse puis nom), biaisé sur la destination
+ *    via `viewbox`, en SÉRIE (~1 req/s) pour respecter la politique de Nominatim
+ *    et ne pas se faire bloquer (429).
+ * 3. En dernier recours : le centre de la destination (jamais une position
+ *    aléatoire, qui donnait des marqueurs éparpillés n'importe où).
  */
 export const enrichWithCoordinates = async (
   activities: ActivitySuggestion[],
   destLat: number,
   destLng: number,
 ): Promise<ActivitySuggestion[]> => {
-
-  // Découpe en batches de 5 pour ne pas surcharger Nominatim
-  const BATCH = 5;
+  // Boîte ~±0.35° (~35 km) autour de la destination : minLon,maxLat,maxLon,minLat
+  const viewbox = `${destLng - 0.35},${destLat + 0.35},${destLng + 0.35},${destLat - 0.35}`;
   const results: ActivitySuggestion[] = [];
 
-  for (let i = 0; i < activities.length; i += BATCH) {
-    const batch = activities.slice(i, i + BATCH);
-
-    const resolved = await Promise.all(
-      batch.map(async (activity): Promise<ActivitySuggestion> => {
-        // Déjà géocodé
-        if (activity.lat && activity.lng) return activity;
-
-        // Stratégie 1 : adresse précise fournie par l'IA
-        if (activity.address) {
-          const c = await nominatimSearch(activity.address);
-          if (c) return { ...activity, ...c };
-        }
-
-        // Stratégie 2 : nom + destination
-        const c2 = await nominatimSearch(`${activity.name}, ${destLat},${destLng}`);
-        if (c2) return { ...activity, ...c2 };
-
-        // Stratégie 3 : Overpass (rayon 20 km)
-        try {
-          const safe  = activity.name.replace(/["\\/]/g, '');
-          const query = `[out:json][timeout:4];(node["name"~"${safe}",i](around:20000,${destLat},${destLng});way["name"~"${safe}",i](around:20000,${destLat},${destLng}););out center 1;`;
-          const { data } = await axios.post(OVERPASS, `data=${encodeURIComponent(query)}`, {
-            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-            timeout: 4000,
-          });
-          const el = data.elements?.[0];
-          if (el) return { ...activity, lat: el.lat ?? el.center?.lat, lng: el.lon ?? el.center?.lon };
-        } catch { /* ignore */ }
-
-        // Fallback : position aléatoire proche du centre
-        const offset = (Math.random() - 0.5) * 0.03;
-        return { ...activity, lat: destLat + offset, lng: destLng + offset };
-      })
-    );
-
-    results.push(...resolved);
-
-    // Petite pause entre batches pour respecter Nominatim
-    if (i + BATCH < activities.length) {
-      await new Promise(r => setTimeout(r, 500));
+  for (const activity of activities) {
+    // 1. Coordonnées IA plausibles → on garde, pas d'appel réseau
+    if (isNearDestination(activity.lat, activity.lng, destLat, destLng)) {
+      results.push(activity);
+      continue;
     }
+
+    // 2. Géocodage Nominatim biaisé sur la destination
+    let coords: { lat: number; lng: number } | null = null;
+    if (activity.address) coords = await nominatimSearch(activity.address, viewbox);
+    if (!coords) coords = await nominatimSearch(`${activity.name}`, viewbox);
+    await sleep(1100); // respect du rate limit Nominatim (1 req/s)
+
+    // 3. Fallback : centre de la destination (jamais aléatoire)
+    results.push({
+      ...activity,
+      lat: coords?.lat ?? destLat,
+      lng: coords?.lng ?? destLng,
+    });
   }
 
   return results;
