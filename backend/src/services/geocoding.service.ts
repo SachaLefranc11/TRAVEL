@@ -2,127 +2,102 @@ import axios from 'axios';
 import { GeocodeResponse, ActivitySuggestion } from '../dtos/ai-suggestion.dto';
 
 const NOMINATIM = 'https://nominatim.openstreetmap.org';
-const OVERPASS = 'https://overpass-api.de/api/interpreter';
+const OVERPASS  = 'https://overpass-api.de/api/interpreter';
+const HEADERS   = { 'User-Agent': 'TravelApp/1.0 (contact@travel-app.dev)' };
 
-const headers = { 'User-Agent': 'TravelApp/1.0 (contact@travel-app.dev)' };
-
-/** Pause pour respecter le rate-limit Nominatim (1 req/s) */
-const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
-
-/**
- * Convertit un nom de destination en coordonnées GPS via OpenStreetMap Nominatim.
- */
-export const geocodeDestination = async (destination: string): Promise<GeocodeResponse | null> => {
+/** Géocode un texte libre via Nominatim. Retourne null si introuvable. */
+const nominatimSearch = async (q: string): Promise<{ lat: number; lng: number } | null> => {
   try {
     const { data } = await axios.get(`${NOMINATIM}/search`, {
-      headers,
-      params: { q: destination, format: 'json', limit: 1, addressdetails: 1 },
-      timeout: 8000,
+      headers: HEADERS,
+      params: { q, format: 'json', limit: 1 },
+      timeout: 5000,
     });
-
-    if (!data || data.length === 0) return null;
-
-    const result = data[0];
-    const lat = parseFloat(result.lat);
-    const lng = parseFloat(result.lon);
-
-    const type: string = result.type ?? '';
-    const zoom = ['city', 'town', 'village'].includes(type) ? 12
-      : ['country', 'state'].includes(type) ? 6
-      : 13;
-
-    return { lat, lng, displayName: result.display_name, zoom };
-  } catch (err: any) {
-    console.error('[Geocoding] Erreur Nominatim:', err?.message);
-    return null;
-  }
-};
-
-/**
- * Géocode une adresse précise via Nominatim.
- * Retourne lat/lng ou null si introuvable.
- */
-const geocodeAddress = async (address: string): Promise<{ lat: number; lng: number } | null> => {
-  try {
-    const { data } = await axios.get(`${NOMINATIM}/search`, {
-      headers,
-      params: { q: address, format: 'json', limit: 1 },
-      timeout: 6000,
-    });
-    if (!data || data.length === 0) return null;
+    if (!data?.length) return null;
     return { lat: parseFloat(data[0].lat), lng: parseFloat(data[0].lon) };
   } catch {
     return null;
   }
 };
 
+/** Géolocalise une destination et retourne lat/lng + zoom recommandé. */
+export const geocodeDestination = async (destination: string): Promise<GeocodeResponse | null> => {
+  try {
+    const { data } = await axios.get(`${NOMINATIM}/search`, {
+      headers: HEADERS,
+      params: { q: destination, format: 'json', limit: 1, addressdetails: 1 },
+      timeout: 8000,
+    });
+    if (!data?.length) return null;
+    const r    = data[0];
+    const lat  = parseFloat(r.lat);
+    const lng  = parseFloat(r.lon);
+    const type: string = r.type ?? '';
+    const zoom = ['city', 'town', 'village'].includes(type) ? 12
+      : ['country', 'state'].includes(type) ? 6 : 13;
+    return { lat, lng, displayName: r.display_name, zoom };
+  } catch (err: any) {
+    console.error('[Geocoding] Nominatim:', err?.message);
+    return null;
+  }
+};
+
 /**
- * Enrichit les activités IA avec des coordonnées GPS précises.
- * Stratégie par priorité :
- *   1. Adresse complète via Nominatim (le plus précis)
- *   2. Nom du lieu via Overpass (dans un rayon de 20km)
- *   3. Fallback : position approchée autour du centre de destination
+ * Enrichit les activités avec des coordonnées GPS.
+ * Toutes les requêtes se font EN PARALLÈLE (max 5 à la fois) pour éviter 17s d'attente.
  */
 export const enrichWithCoordinates = async (
   activities: ActivitySuggestion[],
   destLat: number,
   destLng: number,
 ): Promise<ActivitySuggestion[]> => {
+
+  // Découpe en batches de 5 pour ne pas surcharger Nominatim
+  const BATCH = 5;
   const results: ActivitySuggestion[] = [];
 
-  for (let i = 0; i < activities.length; i++) {
-    const activity = activities[i];
+  for (let i = 0; i < activities.length; i += BATCH) {
+    const batch = activities.slice(i, i + BATCH);
 
-    // Activité déjà géocodée
-    if (activity.lat && activity.lng) {
-      results.push(activity);
-      continue;
+    const resolved = await Promise.all(
+      batch.map(async (activity): Promise<ActivitySuggestion> => {
+        // Déjà géocodé
+        if (activity.lat && activity.lng) return activity;
+
+        // Stratégie 1 : adresse précise fournie par l'IA
+        if (activity.address) {
+          const c = await nominatimSearch(activity.address);
+          if (c) return { ...activity, ...c };
+        }
+
+        // Stratégie 2 : nom + destination
+        const c2 = await nominatimSearch(`${activity.name}, ${destLat},${destLng}`);
+        if (c2) return { ...activity, ...c2 };
+
+        // Stratégie 3 : Overpass (rayon 20 km)
+        try {
+          const safe  = activity.name.replace(/["\\/]/g, '');
+          const query = `[out:json][timeout:4];(node["name"~"${safe}",i](around:20000,${destLat},${destLng});way["name"~"${safe}",i](around:20000,${destLat},${destLng}););out center 1;`;
+          const { data } = await axios.post(OVERPASS, `data=${encodeURIComponent(query)}`, {
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            timeout: 4000,
+          });
+          const el = data.elements?.[0];
+          if (el) return { ...activity, lat: el.lat ?? el.center?.lat, lng: el.lon ?? el.center?.lon };
+        } catch { /* ignore */ }
+
+        // Fallback : position aléatoire proche du centre
+        const offset = (Math.random() - 0.5) * 0.03;
+        return { ...activity, lat: destLat + offset, lng: destLng + offset };
+      })
+    );
+
+    results.push(...resolved);
+
+    // Petite pause entre batches pour respecter Nominatim
+    if (i + BATCH < activities.length) {
+      await new Promise(r => setTimeout(r, 500));
     }
-
-    // Pause entre requêtes Nominatim (respecte le rate-limit 1 req/s)
-    if (i > 0) await sleep(1100);
-
-    // Stratégie 1 : géocoder l'adresse précise fournie par l'IA
-    if (activity.address) {
-      const coords = await geocodeAddress(activity.address);
-      if (coords) {
-        results.push({ ...activity, ...coords });
-        continue;
-      }
-    }
-
-    // Stratégie 2 : recherche par nom + destination via Nominatim
-    const nameCoords = await geocodeAddress(`${activity.name}, ${destLat},${destLng}`);
-    if (nameCoords) {
-      results.push({ ...activity, ...nameCoords });
-      continue;
-    }
-
-    // Stratégie 3 : Overpass (nom dans rayon 20km)
-    try {
-      const query = `
-        [out:json][timeout:5];
-        (
-          node["name"~"${activity.name.replace(/["\\/]/g, '')}",i](around:20000,${destLat},${destLng});
-          way["name"~"${activity.name.replace(/["\\/]/g, '')}",i](around:20000,${destLat},${destLng});
-        );
-        out center 1;
-      `;
-      const { data } = await axios.post(OVERPASS, `data=${encodeURIComponent(query)}`, {
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        timeout: 5000,
-      });
-      const elements = data.elements ?? [];
-      if (elements.length > 0) {
-        const el = elements[0];
-        results.push({ ...activity, lat: el.lat ?? el.center?.lat, lng: el.lon ?? el.center?.lon });
-        continue;
-      }
-    } catch { /* ignore */ }
-
-    // Fallback : position légèrement décalée autour du centre
-    const offset = (Math.random() - 0.5) * 0.03;
-    results.push({ ...activity, lat: destLat + offset, lng: destLng + offset });
   }
 
   return results;

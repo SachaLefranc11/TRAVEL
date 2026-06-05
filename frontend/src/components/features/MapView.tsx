@@ -216,9 +216,13 @@ export const MapView = ({ locations, destination, onAdd, onDelete, canEdit }: Pr
         </div>
       )}
 
-      {/* Carte */}
+      {/* Carte — pointer-events désactivés quand un modal est ouvert */}
       <div className="relative rounded-xl overflow-hidden shadow-sm border border-gray-200">
-        <div ref={mapRef} className="h-96 w-full" />
+        <div
+          ref={mapRef}
+          className="h-96 w-full"
+          style={{ pointerEvents: showAdd ? 'none' : 'auto' }}
+        />
       </div>
 
       {/* Liste des lieux */}

@@ -59,6 +59,15 @@ model Expense {
   createdAt DateTime @default(now())
 }
 
+// Cache des suggestions IA par destination (évite de rappeler Groq)
+model ActivityCache {
+  id          String   @id @default(cuid())
+  destination String   @unique
+  activities  String   // JSON stringifié
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
 model Location {
   id          String  @id @default(cuid())
   tripId      String
