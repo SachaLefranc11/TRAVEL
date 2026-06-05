@@ -216,11 +216,11 @@ export const MapView = ({ locations, destination, onAdd, onDelete, canEdit }: Pr
         </div>
       )}
 
-      {/* Carte — pointer-events désactivés quand un modal est ouvert */}
+      {/* Carte — pointer-events désactivés quand showAdd est ouvert */}
       <div className="relative rounded-xl overflow-hidden shadow-sm border border-gray-200">
         <div
           ref={mapRef}
-          className="h-96 w-full"
+          className="leaflet-container-wrapper h-96 w-full"
           style={{ pointerEvents: showAdd ? 'none' : 'auto' }}
         />
       </div>
