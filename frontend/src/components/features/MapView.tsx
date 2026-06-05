@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
+import 'leaflet/dist/leaflet.css';
 import { MapPin, Sparkles, Loader2 } from 'lucide-react';
 import { Location, LocationType } from '../../types';
 import { Button } from '../ui/Button';
@@ -189,8 +190,6 @@ export const MapView = ({ locations, destination, onAdd, onDelete, canEdit }: Pr
 
   return (
     <div className="space-y-4">
-      <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-
       {/* Toolbar */}
       {canEdit && (
         <div className="flex items-center gap-3 flex-wrap">
@@ -216,13 +215,9 @@ export const MapView = ({ locations, destination, onAdd, onDelete, canEdit }: Pr
         </div>
       )}
 
-      {/* Carte — pointer-events désactivés quand showAdd est ouvert */}
+      {/* Carte */}
       <div className="relative rounded-xl overflow-hidden shadow-sm border border-gray-200">
-        <div
-          ref={mapRef}
-          className="leaflet-container-wrapper h-96 w-full"
-          style={{ pointerEvents: showAdd ? 'none' : 'auto' }}
-        />
+        <div ref={mapRef} className="h-96 w-full" />
       </div>
 
       {/* Liste des lieux */}
