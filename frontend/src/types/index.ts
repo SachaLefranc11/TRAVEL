@@ -95,6 +95,29 @@ export interface Location {
   address?: string;
 }
 
+export interface PlannerActivity {
+  id: string;
+  tripId: string;
+  date: string;
+  title: string;
+  description?: string;
+  startTime?: string;
+  endTime?: string;
+  location?: string;
+  createdById: string;
+  createdAt: string;
+  createdBy: Pick<User, 'id' | 'name' | 'avatar'>;
+}
+
+export interface PlannerActivityInput {
+  date: string;
+  title: string;
+  description?: string;
+  startTime?: string;
+  endTime?: string;
+  location?: string;
+}
+
 export interface AuthResponse {
   token: string;
   user: User;
