@@ -1,6 +1,7 @@
 import { Response } from 'express';
 import prisma from '../services/prisma.service';
 import { AuthRequest } from '../middleware/auth.middleware';
+import { canSeeExpense, isDerived } from '../utils/expenseVisibility';
 
 const tripWithDetails = {
   participants: { include: { user: { select: { id: true, name: true, email: true, avatar: true } } } },
@@ -13,12 +14,19 @@ export const getTrips = async (req: AuthRequest, res: Response) => {
     where: { participants: { some: { userId: req.userId } } },
     include: {
       participants: { include: { user: { select: { id: true, name: true, email: true, avatar: true } } } },
-      expenses: true,
-      _count: { select: { expenses: true, locations: true } },
+      expenses: { include: { shares: { select: { userId: true } } } },
+      _count: { select: { locations: true } },
     },
     orderBy: { startDate: 'desc' },
   });
-  res.json(trips);
+
+  // Confidentialité + total : on garde les dépenses visibles et on exclut les
+  // parts dérivées (sinon double comptage des totaux du tableau de bord).
+  const result = trips.map((t) => {
+    const visible = t.expenses.filter((e) => canSeeExpense(e, req.userId!) && !isDerived(e));
+    return { ...t, expenses: visible, _count: { ...t._count, expenses: visible.length } };
+  });
+  res.json(result);
 };
 
 export const getTrip = async (req: AuthRequest, res: Response) => {
@@ -28,6 +36,8 @@ export const getTrip = async (req: AuthRequest, res: Response) => {
     include: tripWithDetails,
   });
   if (!trip) { res.status(404).json({ error: 'Trip not found' }); return; }
+  // Confidentialité : masque les dépenses personnelles des autres participants
+  trip.expenses = trip.expenses.filter((e) => canSeeExpense(e, req.userId!));
   res.json(trip);
 };
 

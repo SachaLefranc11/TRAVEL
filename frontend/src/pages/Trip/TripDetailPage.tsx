@@ -20,8 +20,10 @@ import { Expense, ExpenseInput, Location, Trip } from '../../types';
 const formatDate = (d: string) =>
   new Date(d).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' });
 
-// Une dépense est "perso" si elle n'a qu'une part = le payeur (ou aucune part legacy)
+// Une dépense est "perso" si c'est une part dérivée, ou si sa seule part est le
+// payeur (ou aucune part legacy). Les dérivées sont privées (vue perso).
 const isPersonalExpense = (e: Expense) =>
+  !!e.parentExpenseId ||
   !e.shares || e.shares.length === 0 ||
   (e.shares.length === 1 && e.shares[0].userId === e.paidById);
 
@@ -125,7 +127,9 @@ export const TripDetailPage = () => {
   if (!trip) return <div className="text-center py-16 text-gray-500">Voyage introuvable</div>;
 
   const isOwner = trip.ownerId === user?.id;
-  const totalExpenses = trip.expenses?.reduce((s, e) => s + e.amount, 0) ?? 0;
+  // Pour les totaux/graphes, on exclut les parts dérivées (sous-parts d'une dépense partagée)
+  const realExpenses = (trip.expenses ?? []).filter(e => !e.parentExpenseId);
+  const totalExpenses = realExpenses.reduce((s, e) => s + e.amount, 0);
 
   const nameOf = (userId: string) =>
     trip.participants.find(p => p.user.id === userId)?.user.name ?? 'Inconnu';
@@ -152,7 +156,8 @@ export const TripDetailPage = () => {
       <span className="text-sm font-bold text-gray-900 flex-shrink-0">
         {e.amount.toFixed(2)} {e.currency}
       </span>
-      {(isOwner || e.paidById === user?.id) && (
+      {/* Pas de suppression directe des parts dérivées (gérées via la dépense partagée) */}
+      {!e.parentExpenseId && (isOwner || e.paidById === user?.id) && (
         <button onClick={() => deleteExpenseMutation.mutate(e.id)} className="text-gray-300 hover:text-red-400 transition-colors">
           <Trash2 size={14} />
         </button>
@@ -263,9 +268,9 @@ export const TripDetailPage = () => {
 
             <div className="card">
               <h3 className="font-semibold text-gray-900 mb-4">Dépenses par catégorie</h3>
-              {(trip.expenses?.length ?? 0) > 0 ? (
+              {realExpenses.length > 0 ? (
                 <>
-                  <ExpenseChart expenses={trip.expenses ?? []} />
+                  <ExpenseChart expenses={realExpenses} />
                   <p className="text-center text-sm font-bold text-gray-800 mt-2">
                     Total : {totalExpenses.toFixed(2)} €
                   </p>

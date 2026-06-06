@@ -96,6 +96,14 @@ model Expense {
   trip      Trip     @relation(fields: [tripId], references: [id], onDelete: Cascade)
   shares    ExpenseShare[]
   createdAt DateTime @default(now())
+
+  // Dépense personnelle générée automatiquement à partir d'une dépense partagée
+  // (la part de chaque participant). parentExpenseId pointe vers la dépense de groupe.
+  parentExpenseId String?
+  parent          Expense?  @relation("ExpenseSplit", fields: [parentExpenseId], references: [id], onDelete: Cascade)
+  children        Expense[] @relation("ExpenseSplit")
+
+  @@index([parentExpenseId])
 }
 
 // Part d'une dépense due par un participant (modèle façon Tricount).
