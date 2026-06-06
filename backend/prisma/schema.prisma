@@ -19,6 +19,8 @@ model User {
   shares       ExpenseShare[]
   resetTokens  PasswordResetToken[]
   plannerActivities PlannerActivity[]
+  settlementsFrom Settlement[] @relation("SettlementFrom")
+  settlementsTo   Settlement[] @relation("SettlementTo")
 }
 
 // Jetons de réinitialisation de mot de passe.
@@ -50,6 +52,23 @@ model Trip {
   expenses     Expense[]
   locations    Location[]
   plannerActivities PlannerActivity[]
+  settlements  Settlement[]
+}
+
+// Remboursement enregistré entre deux participants (règle une dette).
+model Settlement {
+  id         String   @id @default(cuid())
+  tripId     String
+  fromUserId String
+  toUserId   String
+  amount     Float
+  currency   String   @default("EUR")
+  createdAt  DateTime @default(now())
+  trip       Trip     @relation(fields: [tripId], references: [id], onDelete: Cascade)
+  fromUser   User     @relation("SettlementFrom", fields: [fromUserId], references: [id])
+  toUser     User     @relation("SettlementTo", fields: [toUserId], references: [id])
+
+  @@index([tripId])
 }
 
 // Activité planifiée jour par jour (planning collaboratif).

@@ -1,5 +1,5 @@
 import api from './api';
-import { Trip, Expense, ExpenseInput, Location, CurrencyBalance, TripParticipant, PlannerActivity, PlannerActivityInput } from '../types';
+import { Trip, Expense, ExpenseInput, Location, CurrencyBalance, RecordedSettlement, TripParticipant, PlannerActivity, PlannerActivityInput } from '../types';
 
 export const tripsService = {
   getAll: () => api.get<Trip[]>('/trips').then(r => r.data),
@@ -16,6 +16,12 @@ export const tripsService = {
   deleteExpense: (tripId: string, eid: string) => api.delete(`/trips/${tripId}/expenses/${eid}`),
 
   getBalances: (tripId: string) => api.get<CurrencyBalance[]>(`/trips/${tripId}/balances`).then(r => r.data),
+
+  getSettlements: (tripId: string) =>
+    api.get<RecordedSettlement[]>(`/trips/${tripId}/settlements`).then(r => r.data),
+  createSettlement: (tripId: string, data: { fromUserId: string; toUserId: string; amount: number; currency: string }) =>
+    api.post<RecordedSettlement>(`/trips/${tripId}/settlements`, data).then(r => r.data),
+  deleteSettlement: (tripId: string, sid: string) => api.delete(`/trips/${tripId}/settlements/${sid}`),
 
   inviteParticipant: (tripId: string, email: string) =>
     api.post<TripParticipant>(`/trips/${tripId}/participants`, { email }).then(r => r.data),
