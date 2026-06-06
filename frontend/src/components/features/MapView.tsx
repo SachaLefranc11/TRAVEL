@@ -1,10 +1,12 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import 'leaflet/dist/leaflet.css';
-import { MapPin, Sparkles, Loader2 } from 'lucide-react';
+import { AnimatePresence } from 'framer-motion';
+import { MapPin, Sparkles, Loader2, Maximize2 } from 'lucide-react';
 import { Location, LocationType } from '../../types';
 import { Button } from '../ui/Button';
 import { Modal } from '../ui/Modal';
 import { Input } from '../ui/Input';
+import { FullscreenMap } from './FullscreenMap';
 import { aiService, ActivitySuggestion } from '../../services/ai.service';
 
 const TYPE_COLORS: Record<LocationType, string> = {
@@ -36,6 +38,7 @@ export const MapView = ({ locations, destination, onAdd, onDelete, canEdit }: Pr
   const mapInstanceRef = useRef<any>(null);
   const markersRef = useRef<any[]>([]);
   const [showAdd, setShowAdd] = useState(false);
+  const [showFullscreen, setShowFullscreen] = useState(false);
   const [clickCoords, setClickCoords] = useState<{ lat: number; lng: number } | null>(null);
   const [newLoc, setNewLoc] = useState({ name: '', type: 'ATTRACTION' as LocationType, description: '' });
   const [loadingAI, setLoadingAI] = useState(false);
@@ -218,7 +221,25 @@ export const MapView = ({ locations, destination, onAdd, onDelete, canEdit }: Pr
       {/* Carte */}
       <div className="relative rounded-xl overflow-hidden shadow-sm border border-gray-200">
         <div ref={mapRef} className="h-96 w-full" />
+        <button
+          type="button"
+          onClick={() => setShowFullscreen(true)}
+          className="absolute top-3 right-3 z-[500] flex items-center gap-1.5 bg-white/90 backdrop-blur text-gray-700 text-xs font-medium px-3 py-2 rounded-lg shadow-md hover:bg-white transition-colors"
+          title="Afficher en plein écran"
+        >
+          <Maximize2 size={14} /> Plein écran
+        </button>
       </div>
+
+      <AnimatePresence>
+        {showFullscreen && (
+          <FullscreenMap
+            locations={locations}
+            destination={destination}
+            onClose={() => setShowFullscreen(false)}
+          />
+        )}
+      </AnimatePresence>
 
       {/* Liste des lieux */}
       {locations.length > 0 && (
