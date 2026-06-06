@@ -4,7 +4,7 @@ import { z } from 'zod';
 import { useMemo, useState } from 'react';
 import { Input } from '../ui/Input';
 import { Button } from '../ui/Button';
-import { ExpenseInput, SplitType, TripParticipant } from '../../types';
+import { Expense, ExpenseInput, SplitType, TripParticipant } from '../../types';
 
 const schema = z.object({
   title: z.string().min(1, 'Titre requis'),
@@ -33,26 +33,55 @@ const SPLIT_TABS: { value: SplitType; label: string }[] = [
 interface Props {
   participants: TripParticipant[];
   currentUserId: string;
+  /** Si fourni, le formulaire est en mode édition et est pré-rempli. */
+  defaultExpense?: Expense;
   onSubmit: (data: ExpenseInput) => void;
   onCancel: () => void;
   isLoading?: boolean;
 }
 
-export const ExpenseForm = ({ participants, currentUserId, onSubmit, onCancel, isLoading }: Props) => {
-  const memberIds = useMemo(() => participants.map(p => p.user.id), [participants]);
+/** Déduit le type de répartition et les parts à partir d'une dépense existante. */
+const deriveSplit = (memberIds: string[], expense?: Expense) => {
+  const fallback = { splitType: 'EQUAL' as SplitType, included: new Set(memberIds), custom: {} as Record<string, string> };
+  const shares = expense?.shares;
+  if (!expense || !shares || shares.length === 0) return fallback;
 
-  const [paidById, setPaidById] = useState(currentUserId);
-  const [splitType, setSplitType] = useState<SplitType>('EQUAL');
-  const [included, setIncluded] = useState<Set<string>>(new Set(memberIds));
-  const [custom, setCustom] = useState<Record<string, string>>({});
+  if (shares.length === 1 && shares[0].userId === expense.paidById) {
+    return { splitType: 'PERSONAL' as SplitType, included: new Set(memberIds), custom: {} };
+  }
+  const amounts = shares.map(s => s.amount);
+  const allEqual = amounts.every(a => Math.abs(a - amounts[0]) < 0.01);
+  if (allEqual && shares.length > 1) {
+    return { splitType: 'EQUAL' as SplitType, included: new Set(shares.map(s => s.userId)), custom: {} };
+  }
+  const custom: Record<string, string> = {};
+  shares.forEach(s => { custom[s.userId] = String(s.amount); });
+  return { splitType: 'CUSTOM' as SplitType, included: new Set(memberIds), custom };
+};
+
+export const ExpenseForm = ({ participants, currentUserId, defaultExpense, onSubmit, onCancel, isLoading }: Props) => {
+  const memberIds = useMemo(() => participants.map(p => p.user.id), [participants]);
+  const initialSplit = useMemo(() => deriveSplit(memberIds, defaultExpense), [memberIds, defaultExpense]);
+  const isEdit = !!defaultExpense;
+
+  const [paidById, setPaidById] = useState(defaultExpense?.paidById ?? currentUserId);
+  const [splitType, setSplitType] = useState<SplitType>(initialSplit.splitType);
+  const [included, setIncluded] = useState<Set<string>>(initialSplit.included);
+  const [custom, setCustom] = useState<Record<string, string>>(initialSplit.custom);
   const [splitError, setSplitError] = useState('');
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { register, handleSubmit, watch, formState: { errors } } = useForm<any>({
     resolver: zodResolver(schema),
     defaultValues: {
-      title: '', amount: undefined, currency: 'EUR', category: 'TRANSPORT',
-      date: new Date().toISOString().slice(0, 10), notes: '',
+      title: defaultExpense?.title ?? '',
+      amount: defaultExpense?.amount ?? undefined,
+      currency: defaultExpense?.currency ?? 'EUR',
+      category: defaultExpense?.category ?? 'TRANSPORT',
+      date: defaultExpense?.date
+        ? new Date(defaultExpense.date).toISOString().slice(0, 10)
+        : new Date().toISOString().slice(0, 10),
+      notes: defaultExpense?.notes ?? '',
     },
   });
 
@@ -210,7 +239,7 @@ export const ExpenseForm = ({ participants, currentUserId, onSubmit, onCancel, i
 
       <div className="flex gap-3 pt-2">
         <Button type="button" variant="secondary" onClick={onCancel} className="flex-1 justify-center">Annuler</Button>
-        <Button type="submit" loading={isLoading} className="flex-1 justify-center">Ajouter</Button>
+        <Button type="submit" loading={isLoading} className="flex-1 justify-center">{isEdit ? 'Enregistrer' : 'Ajouter'}</Button>
       </div>
     </form>
   );

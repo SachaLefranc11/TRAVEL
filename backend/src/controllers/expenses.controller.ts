@@ -173,9 +173,10 @@ export const updateExpense = async (req: AuthRequest, res: Response) => {
     return;
   }
 
-  const trip = await prisma.trip.findUnique({ where: { id: tripId }, select: { ownerId: true } });
-  const canEdit = existing.paidById === req.userId || trip?.ownerId === req.userId;
-  if (!canEdit) { res.status(403).json({ error: 'Insufficient permissions' }); return; }
+  // Seul le payeur (= créateur) peut modifier sa dépense
+  if (existing.paidById !== req.userId) {
+    res.status(403).json({ error: 'Seul le créateur de la dépense peut la modifier.' }); return;
+  }
 
   const b = req.body;
   const splitChanged = ['amount', 'splitType', 'participantIds', 'shares', 'paidById']
@@ -247,9 +248,10 @@ export const deleteExpense = async (req: AuthRequest, res: Response) => {
     return;
   }
 
-  const trip = await prisma.trip.findUnique({ where: { id: tripId }, select: { ownerId: true } });
-  const canDelete = expense.paidById === req.userId || trip?.ownerId === req.userId;
-  if (!canDelete) { res.status(403).json({ error: 'Insufficient permissions' }); return; }
+  // Seul le payeur (= créateur) peut supprimer sa dépense
+  if (expense.paidById !== req.userId) {
+    res.status(403).json({ error: 'Seul le créateur de la dépense peut la supprimer.' }); return;
+  }
 
   // Les parts dérivées (children) sont supprimées en cascade par la FK
   await prisma.expense.delete({ where: { id: eid } });
