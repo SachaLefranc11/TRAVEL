@@ -42,6 +42,7 @@ export const TripDetailPage = () => {
   const qc = useQueryClient();
   const [showEdit, setShowEdit] = useState(false);
   const [showAddExpense, setShowAddExpense] = useState(false);
+  const [editingExpense, setEditingExpense] = useState<Expense | null>(null);
   const [showInvite, setShowInvite] = useState(false);
   const [inviteEmail, setInviteEmail] = useState('');
   const [inviteError, setInviteError] = useState('');
@@ -88,6 +89,11 @@ export const TripDetailPage = () => {
   const addExpenseMutation = useMutation({
     mutationFn: (data: ExpenseInput) => tripsService.createExpense(id!, data),
     onSuccess: () => { invalidateTrip(); setShowAddExpense(false); },
+  });
+
+  const updateExpenseMutation = useMutation({
+    mutationFn: ({ eid, data }: { eid: string; data: ExpenseInput }) => tripsService.updateExpense(id!, eid, data),
+    onSuccess: () => { invalidateTrip(); setEditingExpense(null); },
   });
 
   const deleteExpenseMutation = useMutation({
@@ -156,11 +162,19 @@ export const TripDetailPage = () => {
       <span className="text-sm font-bold text-gray-900 flex-shrink-0">
         {e.amount.toFixed(2)} {e.currency}
       </span>
-      {/* Pas de suppression directe des parts dérivées (gérées via la dépense partagée) */}
-      {!e.parentExpenseId && (isOwner || e.paidById === user?.id) && (
-        <button onClick={() => deleteExpenseMutation.mutate(e.id)} className="text-gray-300 hover:text-red-400 transition-colors">
-          <Trash2 size={14} />
-        </button>
+      {/* Modifier/supprimer : payeur (= créateur) uniquement ; pas sur les parts dérivées */}
+      {!e.parentExpenseId && e.paidById === user?.id && (
+        <div className="flex items-center gap-1 flex-shrink-0">
+          <button onClick={() => setEditingExpense(e)} className="text-gray-300 hover:text-primary-500 transition-colors" title="Modifier">
+            <Pencil size={14} />
+          </button>
+          <button
+            onClick={() => { if (confirm('Supprimer cette dépense ?')) deleteExpenseMutation.mutate(e.id); }}
+            className="text-gray-300 hover:text-red-400 transition-colors" title="Supprimer"
+          >
+            <Trash2 size={14} />
+          </button>
+        </div>
       )}
     </div>
   );
@@ -399,6 +413,19 @@ export const TripDetailPage = () => {
           onCancel={() => setShowAddExpense(false)}
           isLoading={addExpenseMutation.isPending}
         />
+      </Modal>
+
+      <Modal isOpen={!!editingExpense} onClose={() => setEditingExpense(null)} title="Modifier la dépense">
+        {editingExpense && (
+          <ExpenseForm
+            participants={trip.participants}
+            currentUserId={user?.id ?? ''}
+            defaultExpense={editingExpense}
+            onSubmit={(data) => updateExpenseMutation.mutate({ eid: editingExpense.id, data })}
+            onCancel={() => setEditingExpense(null)}
+            isLoading={updateExpenseMutation.isPending}
+          />
+        )}
       </Modal>
 
       <Modal isOpen={showInvite} onClose={() => setShowInvite(false)} title="Inviter un participant" size="sm">
