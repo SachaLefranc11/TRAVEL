@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { ArrowLeft, Calendar, MapPin, Users, Pencil, Trash2, Plus, UserPlus, ArrowRight, Wallet, X } from 'lucide-react';
+import { ArrowLeft, Calendar, MapPin, Users, Pencil, Trash2, Plus, UserPlus, ArrowRight, Wallet, X, Check } from 'lucide-react';
 import { tripsService } from '../../services/trips.service';
 import { aiService } from '../../services/ai.service';
 import { Button } from '../../components/ui/Button';
@@ -60,6 +60,12 @@ export const TripDetailPage = () => {
     enabled: !!id,
   });
 
+  const { data: recordedSettlements } = useQuery({
+    queryKey: ['settlements', id],
+    queryFn: () => tripsService.getSettlements(id!),
+    enabled: !!id,
+  });
+
   const updateMutation = useMutation({
     mutationFn: async (formData: Partial<Trip> & { _imageFile?: File }) => {
       const { _imageFile, ...data } = formData;
@@ -84,6 +90,7 @@ export const TripDetailPage = () => {
   const invalidateTrip = () => {
     qc.invalidateQueries({ queryKey: ['trip', id] });
     qc.invalidateQueries({ queryKey: ['balances', id] });
+    qc.invalidateQueries({ queryKey: ['settlements', id] });
   };
 
   const addExpenseMutation = useMutation({
@@ -109,6 +116,17 @@ export const TripDetailPage = () => {
 
   const removeParticipantMutation = useMutation({
     mutationFn: (userId: string) => tripsService.removeParticipant(id!, userId),
+    onSuccess: () => invalidateTrip(),
+  });
+
+  const createSettlementMutation = useMutation({
+    mutationFn: (data: { fromUserId: string; toUserId: string; amount: number; currency: string }) =>
+      tripsService.createSettlement(id!, data),
+    onSuccess: () => invalidateTrip(),
+  });
+
+  const deleteSettlementMutation = useMutation({
+    mutationFn: (sid: string) => tripsService.deleteSettlement(id!, sid),
     onSuccess: () => invalidateTrip(),
   });
 
@@ -328,8 +346,46 @@ export const TripDetailPage = () => {
                         <ArrowRight size={14} className="text-gray-400" />
                         <span className="font-medium text-gray-800">{nameOf(s.toUserId)}</span>
                         <span className="ml-auto font-bold text-primary-700">{s.amount.toFixed(2)} {cur.currency}</span>
+                        {/* Seul le créancier (qui reçoit) peut marquer comme remboursé */}
+                        {s.toUserId === user?.id && (
+                          <button
+                            onClick={() => createSettlementMutation.mutate({ fromUserId: s.fromUserId, toUserId: s.toUserId, amount: s.amount, currency: cur.currency })}
+                            disabled={createSettlementMutation.isPending}
+                            className="ml-1 flex items-center gap-1 text-xs font-medium text-green-600 hover:text-green-700 disabled:opacity-50"
+                            title="Marquer comme remboursé"
+                          >
+                            <Check size={14} /> Remboursé
+                          </button>
+                        )}
                       </div>
                     ))}
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Historique des remboursements */}
+            {(recordedSettlements?.length ?? 0) > 0 && (
+              <div className="card space-y-2">
+                <h3 className="font-semibold text-gray-900 flex items-center gap-2">
+                  <Check size={16} className="text-green-600" /> Remboursements
+                </h3>
+                {recordedSettlements!.map(s => (
+                  <div key={s.id} className="flex items-center gap-2 text-sm py-1">
+                    <span className="text-gray-600 line-through decoration-gray-300">
+                      {s.fromUser.name} → {s.toUser.name}
+                    </span>
+                    <span className="ml-auto font-medium text-gray-700">{s.amount.toFixed(2)} {s.currency}</span>
+                    <span className="text-xs text-gray-400 w-20 text-right">{new Date(s.createdAt).toLocaleDateString('fr-FR')}</span>
+                    {s.toUserId === user?.id && (
+                      <button
+                        onClick={() => { if (confirm('Annuler ce remboursement ?')) deleteSettlementMutation.mutate(s.id); }}
+                        className="text-gray-300 hover:text-red-400 transition-colors"
+                        title="Annuler le remboursement"
+                      >
+                        <X size={14} />
+                      </button>
+                    )}
                   </div>
                 ))}
               </div>

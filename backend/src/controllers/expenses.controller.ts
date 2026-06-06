@@ -288,6 +288,18 @@ export const getBalances = async (req: AuthRequest, res: Response) => {
     byCurrency.set(e.currency, net);
   }
 
+  // Applique les remboursements déjà enregistrés : le débiteur a payé, le créancier a reçu
+  const settlements = await prisma.settlement.findMany({
+    where: { tripId },
+    select: { fromUserId: true, toUserId: true, amount: true, currency: true },
+  });
+  for (const s of settlements) {
+    const net = byCurrency.get(s.currency) ?? new Map<string, number>();
+    net.set(s.fromUserId, (net.get(s.fromUserId) ?? 0) + s.amount);
+    net.set(s.toUserId, (net.get(s.toUserId) ?? 0) - s.amount);
+    byCurrency.set(s.currency, net);
+  }
+
   const result = [...byCurrency.entries()].map(([currency, net]) => {
     const balances = [...net.entries()]
       .map(([userId, amount]) => ({ userId, amount: round2(amount) }))

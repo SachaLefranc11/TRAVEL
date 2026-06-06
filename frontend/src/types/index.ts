@@ -84,6 +84,19 @@ export interface CurrencyBalance {
   settlements: Settlement[];
 }
 
+/** Remboursement enregistré entre deux participants. */
+export interface RecordedSettlement {
+  id: string;
+  tripId: string;
+  fromUserId: string;
+  toUserId: string;
+  amount: number;
+  currency: string;
+  createdAt: string;
+  fromUser: Pick<User, 'id' | 'name' | 'avatar'>;
+  toUser: Pick<User, 'id' | 'name' | 'avatar'>;
+}
+
 export type LocationType = 'ATTRACTION' | 'RESTAURANT' | 'HOTEL' | 'ACTIVITY' | 'OTHER';
 
 export interface Location {
