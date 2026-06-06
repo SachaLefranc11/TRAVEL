@@ -4,7 +4,7 @@ import { AuthRequest } from '../middleware/auth.middleware';
 
 const tripWithDetails = {
   participants: { include: { user: { select: { id: true, name: true, email: true, avatar: true } } } },
-  expenses: { include: { paidBy: { select: { id: true, name: true, avatar: true } } } },
+  expenses: { include: { paidBy: { select: { id: true, name: true, avatar: true } }, shares: true } },
   locations: true,
 };
 

@@ -1,10 +1,11 @@
 import { useState } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { ArrowLeft, Calendar, MapPin, Users, Pencil, Trash2, Plus } from 'lucide-react';
+import { ArrowLeft, Calendar, MapPin, Users, Pencil, Trash2, Plus, UserPlus, ArrowRight, Wallet, X } from 'lucide-react';
 import { tripsService } from '../../services/trips.service';
 import { aiService } from '../../services/ai.service';
 import { Button } from '../../components/ui/Button';
+import { Input } from '../../components/ui/Input';
 import { Modal } from '../../components/ui/Modal';
 import { TripForm } from '../../components/features/TripForm';
 import { MapView } from '../../components/features/MapView';
@@ -13,10 +14,15 @@ import { ExpenseForm } from '../../components/features/ExpenseForm';
 import { Badge } from '../../components/ui/Badge';
 import { useAuth } from '../../contexts/AuthContext';
 import { resolveCoverImage } from '../../utils/imageUrl';
-import { Expense, Location, Trip } from '../../types';
+import { Expense, ExpenseInput, Location, Trip } from '../../types';
 
 const formatDate = (d: string) =>
   new Date(d).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' });
+
+// Une dépense est "perso" si elle n'a qu'une part = le payeur (ou aucune part legacy)
+const isPersonalExpense = (e: Expense) =>
+  !e.shares || e.shares.length === 0 ||
+  (e.shares.length === 1 && e.shares[0].userId === e.paidById);
 
 const CATEGORY_LABELS: Record<string, string> = {
   TRANSPORT: 'Transport', ACCOMMODATION: 'Hébergement', FOOD: 'Nourriture',
@@ -33,11 +39,20 @@ export const TripDetailPage = () => {
   const qc = useQueryClient();
   const [showEdit, setShowEdit] = useState(false);
   const [showAddExpense, setShowAddExpense] = useState(false);
+  const [showInvite, setShowInvite] = useState(false);
+  const [inviteEmail, setInviteEmail] = useState('');
+  const [inviteError, setInviteError] = useState('');
   const [activeTab, setActiveTab] = useState<'overview' | 'expenses' | 'map'>('overview');
 
   const { data: trip, isLoading } = useQuery({
     queryKey: ['trip', id],
     queryFn: () => tripsService.getOne(id!),
+    enabled: !!id,
+  });
+
+  const { data: balances } = useQuery({
+    queryKey: ['balances', id],
+    queryFn: () => tripsService.getBalances(id!),
     enabled: !!id,
   });
 
@@ -62,14 +77,30 @@ export const TripDetailPage = () => {
     onSuccess: () => navigate('/'),
   });
 
+  const invalidateTrip = () => {
+    qc.invalidateQueries({ queryKey: ['trip', id] });
+    qc.invalidateQueries({ queryKey: ['balances', id] });
+  };
+
   const addExpenseMutation = useMutation({
-    mutationFn: (data: Partial<Expense>) => tripsService.createExpense(id!, data),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['trip', id] }); setShowAddExpense(false); },
+    mutationFn: (data: ExpenseInput) => tripsService.createExpense(id!, data),
+    onSuccess: () => { invalidateTrip(); setShowAddExpense(false); },
   });
 
   const deleteExpenseMutation = useMutation({
     mutationFn: (eid: string) => tripsService.deleteExpense(id!, eid),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['trip', id] }),
+    onSuccess: () => invalidateTrip(),
+  });
+
+  const inviteMutation = useMutation({
+    mutationFn: (email: string) => tripsService.inviteParticipant(id!, email),
+    onSuccess: () => { invalidateTrip(); setShowInvite(false); setInviteEmail(''); setInviteError(''); },
+    onError: (err: any) => setInviteError(err.response?.data?.error || 'Invitation impossible'),
+  });
+
+  const removeParticipantMutation = useMutation({
+    mutationFn: (userId: string) => tripsService.removeParticipant(id!, userId),
+    onSuccess: () => invalidateTrip(),
   });
 
   const addLocationMutation = useMutation({
@@ -94,6 +125,39 @@ export const TripDetailPage = () => {
 
   const isOwner = trip.ownerId === user?.id;
   const totalExpenses = trip.expenses?.reduce((s, e) => s + e.amount, 0) ?? 0;
+
+  const nameOf = (userId: string) =>
+    trip.participants.find(p => p.user.id === userId)?.user.name ?? 'Inconnu';
+
+  const groupExpenses = (trip.expenses ?? []).filter(e => !isPersonalExpense(e));
+  const personalExpenses = (trip.expenses ?? []).filter(e => isPersonalExpense(e));
+  const hasSettlements = (balances ?? []).some(b => b.settlements.length > 0);
+
+  const renderExpenseRow = (e: Expense) => (
+    <div key={e.id} className="flex items-center gap-4 py-3">
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className="text-sm font-medium text-gray-900">{e.title}</span>
+          <Badge label={CATEGORY_LABELS[e.category] ?? e.category} color={CATEGORY_COLORS[e.category] ?? 'gray'} />
+          {!isPersonalExpense(e) && (
+            <span className="text-xs text-gray-400">Partagé · {e.shares?.length ?? 0}</span>
+          )}
+        </div>
+        <p className="text-xs text-gray-400 mt-0.5">
+          {new Date(e.date).toLocaleDateString('fr-FR')} · Payé par {e.paidBy.name}
+        </p>
+        {e.notes && <p className="text-xs text-gray-500 mt-0.5 italic">{e.notes}</p>}
+      </div>
+      <span className="text-sm font-bold text-gray-900 flex-shrink-0">
+        {e.amount.toFixed(2)} {e.currency}
+      </span>
+      {(isOwner || e.paidById === user?.id) && (
+        <button onClick={() => deleteExpenseMutation.mutate(e.id)} className="text-gray-300 hover:text-red-400 transition-colors">
+          <Trash2 size={14} />
+        </button>
+      )}
+    </div>
+  );
 
   const coverSrc = resolveCoverImage(trip.coverImage)
     || 'https://images.unsplash.com/photo-1488646953014-85cb44e25828?w=800&h=300&fit=crop';
@@ -167,14 +231,30 @@ export const TripDetailPage = () => {
               <h3 className="font-semibold text-gray-900">Informations</h3>
               {trip.description && <p className="text-gray-600 text-sm leading-relaxed">{trip.description}</p>}
               <div className="space-y-2 pt-2">
-                <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide">Participants</p>
+                <div className="flex items-center justify-between">
+                  <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide">Participants</p>
+                  {isOwner && (
+                    <Button size="sm" variant="ghost" icon={<UserPlus size={14} />} onClick={() => { setInviteError(''); setShowInvite(true); }}>
+                      Inviter
+                    </Button>
+                  )}
+                </div>
                 {trip.participants.map(p => (
-                  <div key={p.id} className="flex items-center gap-3">
+                  <div key={p.id} className="flex items-center gap-3 group">
                     <div className="w-9 h-9 rounded-full bg-primary-100 flex items-center justify-center text-primary-700 font-semibold text-sm">
                       {p.user.name[0].toUpperCase()}
                     </div>
                     <span className="text-sm text-gray-700 font-medium">{p.user.name}</span>
                     {p.role === 'OWNER' && <Badge label="Organisateur" color="blue" />}
+                    {isOwner && p.role !== 'OWNER' && (
+                      <button
+                        onClick={() => { if (confirm(`Retirer ${p.user.name} du voyage ?`)) removeParticipantMutation.mutate(p.user.id); }}
+                        className="ml-auto text-gray-300 hover:text-red-400 transition-colors opacity-0 group-hover:opacity-100"
+                        title="Retirer"
+                      >
+                        <X size={14} />
+                      </button>
+                    )}
                   </div>
                 ))}
               </div>
@@ -203,7 +283,7 @@ export const TripDetailPage = () => {
 
         {/* Tab: Expenses */}
         {activeTab === 'expenses' && (
-          <div className="card space-y-4">
+          <div className="space-y-6">
             <div className="flex items-center justify-between">
               <h3 className="font-semibold text-gray-900">
                 Dépenses <span className="text-gray-400 font-normal">({trip.expenses?.length ?? 0})</span>
@@ -211,36 +291,50 @@ export const TripDetailPage = () => {
               <Button size="sm" icon={<Plus size={14} />} onClick={() => setShowAddExpense(true)}>Ajouter</Button>
             </div>
 
-            {(trip.expenses?.length ?? 0) === 0 ? (
-              <p className="text-gray-400 text-sm text-center py-10">Aucune dépense pour l'instant</p>
-            ) : (
-              <div className="divide-y divide-gray-50">
-                {trip.expenses?.map(e => (
-                  <div key={e.id} className="flex items-center gap-4 py-3">
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <span className="text-sm font-medium text-gray-900">{e.title}</span>
-                        <Badge label={CATEGORY_LABELS[e.category] ?? e.category} color={CATEGORY_COLORS[e.category] ?? 'gray'} />
-                      </div>
-                      <p className="text-xs text-gray-400 mt-0.5">
-                        {new Date(e.date).toLocaleDateString('fr-FR')} · Payé par {e.paidBy.name}
-                      </p>
-                      {e.notes && <p className="text-xs text-gray-500 mt-0.5 italic">{e.notes}</p>}
-                    </div>
-                    <span className="text-sm font-bold text-gray-900 flex-shrink-0">
-                      {e.amount.toFixed(2)} {e.currency}
-                    </span>
-                    {(isOwner || e.paidById === user?.id) && (
-                      <button onClick={() => deleteExpenseMutation.mutate(e.id)} className="text-gray-300 hover:text-red-400 transition-colors">
-                        <Trash2 size={14} />
-                      </button>
+            {/* Récapitulatif des remboursements */}
+            {hasSettlements && (
+              <div className="card space-y-3">
+                <h3 className="font-semibold text-gray-900 flex items-center gap-2">
+                  <Wallet size={16} className="text-primary-600" /> Qui doit quoi
+                </h3>
+                {balances?.filter(c => c.settlements.length > 0).map(cur => (
+                  <div key={cur.currency} className="space-y-2">
+                    {(balances?.length ?? 0) > 1 && (
+                      <p className="text-xs font-semibold text-gray-400 uppercase">{cur.currency}</p>
                     )}
+                    {cur.settlements.map((s, i) => (
+                      <div key={i} className="flex items-center gap-2 text-sm bg-gray-50 rounded-lg px-3 py-2">
+                        <span className="font-medium text-gray-800">{nameOf(s.fromUserId)}</span>
+                        <ArrowRight size={14} className="text-gray-400" />
+                        <span className="font-medium text-gray-800">{nameOf(s.toUserId)}</span>
+                        <span className="ml-auto font-bold text-primary-700">{s.amount.toFixed(2)} {cur.currency}</span>
+                      </div>
+                    ))}
                   </div>
                 ))}
-                <div className="flex justify-between pt-4 font-bold text-gray-900 text-base">
-                  <span>Total</span>
-                  <span>{totalExpenses.toFixed(2)} €</span>
-                </div>
+              </div>
+            )}
+
+            {/* Dépenses de groupe */}
+            <div className="card space-y-2">
+              <h3 className="font-semibold text-gray-900 flex items-center gap-2">
+                <Users size={16} className="text-primary-600" /> Dépenses partagées
+                <span className="text-gray-400 font-normal text-sm">({groupExpenses.length})</span>
+              </h3>
+              {groupExpenses.length === 0 ? (
+                <p className="text-gray-400 text-sm text-center py-8">Aucune dépense partagée pour l'instant</p>
+              ) : (
+                <div className="divide-y divide-gray-50">{groupExpenses.map(renderExpenseRow)}</div>
+              )}
+            </div>
+
+            {/* Dépenses personnelles */}
+            {personalExpenses.length > 0 && (
+              <div className="card space-y-2">
+                <h3 className="font-semibold text-gray-900">
+                  Dépenses personnelles <span className="text-gray-400 font-normal text-sm">({personalExpenses.length})</span>
+                </h3>
+                <div className="divide-y divide-gray-50">{personalExpenses.map(renderExpenseRow)}</div>
               </div>
             )}
           </div>
@@ -279,10 +373,35 @@ export const TripDetailPage = () => {
 
       <Modal isOpen={showAddExpense} onClose={() => setShowAddExpense(false)} title="Ajouter une dépense">
         <ExpenseForm
+          participants={trip.participants}
+          currentUserId={user?.id ?? ''}
           onSubmit={(data) => addExpenseMutation.mutate(data)}
           onCancel={() => setShowAddExpense(false)}
           isLoading={addExpenseMutation.isPending}
         />
+      </Modal>
+
+      <Modal isOpen={showInvite} onClose={() => setShowInvite(false)} title="Inviter un participant" size="sm">
+        <form
+          onSubmit={(e) => { e.preventDefault(); if (inviteEmail) inviteMutation.mutate(inviteEmail); }}
+          className="space-y-4"
+        >
+          <p className="text-sm text-gray-500">
+            La personne doit déjà avoir un compte Travel. Saisissez son email.
+          </p>
+          <Input
+            label="Email"
+            type="email"
+            placeholder="ami@example.com"
+            value={inviteEmail}
+            onChange={(e) => setInviteEmail(e.target.value)}
+          />
+          {inviteError && <p className="text-sm text-red-600 bg-red-50 p-3 rounded-lg">{inviteError}</p>}
+          <div className="flex gap-3">
+            <Button type="button" variant="secondary" onClick={() => setShowInvite(false)} className="flex-1 justify-center">Annuler</Button>
+            <Button type="submit" loading={inviteMutation.isPending} disabled={!inviteEmail} className="flex-1 justify-center">Inviter</Button>
+          </div>
+        </form>
       </Modal>
     </>
   );
