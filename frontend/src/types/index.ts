@@ -52,6 +52,8 @@ export interface Expense {
   createdAt: string;
   paidBy: Pick<User, 'id' | 'name' | 'avatar'>;
   shares?: ExpenseShare[];
+  /** Défini si la dépense est une part personnelle dérivée d'une dépense partagée. */
+  parentExpenseId?: string | null;
 }
 
 export type SplitType = 'PERSONAL' | 'EQUAL' | 'CUSTOM';

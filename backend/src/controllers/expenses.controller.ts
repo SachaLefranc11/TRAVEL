@@ -1,6 +1,7 @@
 import { Response } from 'express';
 import prisma from '../services/prisma.service';
 import { AuthRequest } from '../middleware/auth.middleware';
+import { canSeeExpense } from '../utils/expenseVisibility';
 
 const isMember = async (tripId: string, userId: string) =>
   prisma.tripParticipant.findFirst({ where: { tripId, userId } });
@@ -13,6 +14,30 @@ const expenseInclude = {
 const round2 = (n: number) => Math.round(n * 100) / 100;
 
 type ShareRow = { userId: string; amount: number };
+
+/** Une répartition est "perso" (non partagée) si elle se limite au payeur. */
+const isPersonalSplit = (shareRows: ShareRow[], payerId: string): boolean =>
+  shareRows.length === 0 || (shareRows.length === 1 && shareRows[0].userId === payerId);
+
+/**
+ * Construit les dépenses personnelles dérivées (la part de chaque participant)
+ * à partir d'une dépense partagée. Chacune appartient au participant concerné.
+ */
+const buildChildren = (
+  parentId: string,
+  scalars: { title: string; currency: string; category: string; date: Date; tripId: string },
+  shareRows: ShareRow[],
+) =>
+  shareRows.map((s) => ({
+    title: `${scalars.title} (partagé) — ta part : ${s.amount.toFixed(2)} ${scalars.currency}`,
+    amount: s.amount,
+    currency: scalars.currency,
+    category: scalars.category,
+    date: scalars.date,
+    tripId: scalars.tripId,
+    paidById: s.userId,
+    parentExpenseId: parentId,
+  }));
 
 /** Répartit `amount` également entre userIds en gérant l'arrondi au centime. */
 const splitEqually = (amount: number, userIds: string[]): ShareRow[] => {
@@ -79,7 +104,9 @@ export const getExpenses = async (req: AuthRequest, res: Response) => {
     include: expenseInclude,
     orderBy: { date: 'desc' },
   });
-  res.json(expenses);
+  // Confidentialité : on ne renvoie que les dépenses partagées + les dépenses
+  // personnelles de l'utilisateur courant.
+  res.json(expenses.filter((e) => canSeeExpense(e, req.userId!)));
 };
 
 export const createExpense = async (req: AuthRequest, res: Response) => {
@@ -104,16 +131,29 @@ export const createExpense = async (req: AuthRequest, res: Response) => {
     res.status(400).json({ error: shareErrorMessage(e) }); return;
   }
 
-  const expense = await prisma.expense.create({
-    data: {
-      title, amount, currency, category, notes,
-      date: new Date(date),
-      tripId,
-      paidById: payerId,
-      shares: { create: shareRows },
-    },
-    include: expenseInclude,
+  const expenseDate = new Date(date);
+  const shared = !isPersonalSplit(shareRows, payerId);
+
+  const expense = await prisma.$transaction(async (tx) => {
+    const main = await tx.expense.create({
+      data: {
+        title, amount, currency, category, notes,
+        date: expenseDate,
+        tripId,
+        paidById: payerId,
+        shares: { create: shareRows },
+      },
+      include: expenseInclude,
+    });
+    // Dépense partagée → on crée la part personnelle de chaque participant
+    if (shared) {
+      await tx.expense.createMany({
+        data: buildChildren(main.id, { title, currency, category, date: expenseDate, tripId }, shareRows),
+      });
+    }
+    return main;
   });
+
   res.status(201).json(expense);
 };
 
@@ -126,6 +166,12 @@ export const updateExpense = async (req: AuthRequest, res: Response) => {
     include: { shares: true },
   });
   if (!existing) { res.status(404).json({ error: 'Expense not found' }); return; }
+
+  // Les parts personnelles générées automatiquement ne sont pas modifiables directement
+  if (existing.parentExpenseId) {
+    res.status(400).json({ error: 'Cette dépense est générée automatiquement et gérée via la dépense partagée.' });
+    return;
+  }
 
   const trip = await prisma.trip.findUnique({ where: { id: tripId }, select: { ownerId: true } });
   const canEdit = existing.paidById === req.userId || trip?.ownerId === req.userId;
@@ -141,35 +187,51 @@ export const updateExpense = async (req: AuthRequest, res: Response) => {
   }
   if (b.date) data.date = new Date(b.date);
   if (b.paidById) data.paidById = b.paidById;
+  if (b.amount !== undefined) data.amount = b.amount;
+
+  // Valeurs effectives (nouvelles ou existantes) pour reconstruire les parts dérivées
+  const eff = {
+    title: b.title ?? existing.title,
+    currency: b.currency ?? existing.currency,
+    category: b.category ?? existing.category,
+    date: b.date ? new Date(b.date) : existing.date,
+    amount: b.amount ?? existing.amount,
+    payerId: b.paidById ?? existing.paidById,
+  };
+
+  let shareRows: ShareRow[] = existing.shares.map((s) => ({ userId: s.userId, amount: s.amount }));
 
   if (splitChanged) {
-    const newAmount: number = b.amount ?? existing.amount;
-    const payerId: string = b.paidById ?? existing.paidById;
     const members = await prisma.tripParticipant.findMany({ where: { tripId }, select: { userId: true } });
     const memberIds = new Set(members.map((m) => m.userId));
-    if (!memberIds.has(payerId)) {
+    if (!memberIds.has(eff.payerId)) {
       res.status(400).json({ error: 'Le payeur doit être un participant du voyage.' }); return;
     }
     const splitType = (b.splitType ?? 'EQUAL') as 'PERSONAL' | 'EQUAL' | 'CUSTOM';
-    // Pour un EQUAL sans liste explicite, on préserve les participants existants
     const fallbackParticipants = existing.shares.map((s) => s.userId);
     const participantIds = b.participantIds ?? (splitType === 'EQUAL' ? fallbackParticipants : undefined);
-
-    let shareRows: ShareRow[];
     try {
-      shareRows = buildShares(newAmount, splitType, payerId, memberIds, participantIds, b.shares);
+      shareRows = buildShares(eff.amount, splitType, eff.payerId, memberIds, participantIds, b.shares);
     } catch (e) {
       res.status(400).json({ error: shareErrorMessage(e) }); return;
     }
-    if (b.amount !== undefined) data.amount = newAmount;
     data.shares = { deleteMany: {}, create: shareRows };
   }
 
-  const updated = await prisma.expense.update({
-    where: { id: eid },
-    data,
-    include: expenseInclude,
+  const shared = !isPersonalSplit(shareRows, eff.payerId);
+
+  await prisma.$transaction(async (tx) => {
+    await tx.expense.update({ where: { id: eid }, data });
+    // On régénère systématiquement les parts dérivées (titre/montant peuvent avoir changé)
+    await tx.expense.deleteMany({ where: { parentExpenseId: eid } });
+    if (shared) {
+      await tx.expense.createMany({
+        data: buildChildren(eid, { title: eff.title, currency: eff.currency, category: eff.category, date: eff.date, tripId }, shareRows),
+      });
+    }
   });
+
+  const updated = await prisma.expense.findUnique({ where: { id: eid }, include: expenseInclude });
   res.json(updated);
 };
 
@@ -179,10 +241,17 @@ export const deleteExpense = async (req: AuthRequest, res: Response) => {
   const expense = await prisma.expense.findFirst({ where: { id: eid, tripId } });
   if (!expense) { res.status(404).json({ error: 'Expense not found' }); return; }
 
+  // Une part personnelle dérivée se supprime via sa dépense partagée parente, pas directement
+  if (expense.parentExpenseId) {
+    res.status(400).json({ error: 'Cette dépense est générée automatiquement (supprimez la dépense partagée).' });
+    return;
+  }
+
   const trip = await prisma.trip.findUnique({ where: { id: tripId }, select: { ownerId: true } });
   const canDelete = expense.paidById === req.userId || trip?.ownerId === req.userId;
   if (!canDelete) { res.status(403).json({ error: 'Insufficient permissions' }); return; }
 
+  // Les parts dérivées (children) sont supprimées en cascade par la FK
   await prisma.expense.delete({ where: { id: eid } });
   res.status(204).send();
 };
@@ -200,13 +269,14 @@ export const getBalances = async (req: AuthRequest, res: Response) => {
 
   const expenses = await prisma.expense.findMany({
     where: { tripId },
-    select: { amount: true, currency: true, paidById: true, shares: { select: { userId: true, amount: true } } },
+    select: { amount: true, currency: true, paidById: true, parentExpenseId: true, shares: { select: { userId: true, amount: true } } },
   });
 
   // net[currency][userId] = total payé - total dû
   const byCurrency = new Map<string, Map<string, number>>();
   for (const e of expenses) {
-    // Dépenses sans parts (legacy) ou perso (seule part = le payeur) → solde neutre, on ignore
+    // On ignore les parts dérivées (sinon double comptage) et les dépenses perso/legacy
+    if (e.parentExpenseId) continue;
     if (e.shares.length === 0) continue;
     if (e.shares.length === 1 && e.shares[0].userId === e.paidById) continue;
 
