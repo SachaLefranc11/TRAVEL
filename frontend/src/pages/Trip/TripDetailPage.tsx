@@ -11,6 +11,7 @@ import { TripForm } from '../../components/features/TripForm';
 import { MapView } from '../../components/features/MapView';
 import { ExpenseChart } from '../../components/features/ExpenseChart';
 import { ExpenseForm } from '../../components/features/ExpenseForm';
+import { TripPlanner } from '../../components/features/TripPlanner';
 import { Badge } from '../../components/ui/Badge';
 import { useAuth } from '../../contexts/AuthContext';
 import { resolveCoverImage } from '../../utils/imageUrl';
@@ -42,7 +43,7 @@ export const TripDetailPage = () => {
   const [showInvite, setShowInvite] = useState(false);
   const [inviteEmail, setInviteEmail] = useState('');
   const [inviteError, setInviteError] = useState('');
-  const [activeTab, setActiveTab] = useState<'overview' | 'expenses' | 'map'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'expenses' | 'planner' | 'map'>('overview');
 
   const { data: trip, isLoading } = useQuery({
     queryKey: ['trip', id],
@@ -211,7 +212,7 @@ export const TripDetailPage = () => {
 
         {/* Tabs */}
         <div className="flex gap-1 bg-gray-100 p-1 rounded-xl w-fit">
-          {(['overview', 'expenses', 'map'] as const).map(tab => (
+          {(['overview', 'expenses', 'planner', 'map'] as const).map(tab => (
             <button
               key={tab}
               onClick={() => setActiveTab(tab)}
@@ -219,7 +220,7 @@ export const TripDetailPage = () => {
                 activeTab === tab ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-600 hover:text-gray-800'
               }`}
             >
-              {tab === 'overview' ? '📋 Aperçu' : tab === 'expenses' ? '💸 Dépenses' : '🗺️ Carte'}
+              {tab === 'overview' ? '📋 Aperçu' : tab === 'expenses' ? '💸 Dépenses' : tab === 'planner' ? '🗓️ Planning' : '🗺️ Carte'}
             </button>
           ))}
         </div>
@@ -337,6 +338,20 @@ export const TripDetailPage = () => {
                 <div className="divide-y divide-gray-50">{personalExpenses.map(renderExpenseRow)}</div>
               </div>
             )}
+          </div>
+        )}
+
+        {/* Tab: Planner */}
+        {activeTab === 'planner' && (
+          <div className="card">
+            <h3 className="font-semibold text-gray-900 mb-4">Planning jour par jour</h3>
+            <TripPlanner
+              tripId={trip.id}
+              startDate={trip.startDate}
+              endDate={trip.endDate}
+              currentUserId={user?.id ?? ''}
+              isOwner={isOwner}
+            />
           </div>
         )}
 
