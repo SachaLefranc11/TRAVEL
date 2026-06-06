@@ -16,6 +16,7 @@ model User {
   createdAt    DateTime          @default(now())
   trips        TripParticipant[]
   expenses     Expense[]
+  shares       ExpenseShare[]
   resetTokens  PasswordResetToken[]
 }
 
@@ -72,7 +73,23 @@ model Expense {
   tripId    String
   paidBy    User     @relation(fields: [paidById], references: [id])
   trip      Trip     @relation(fields: [tripId], references: [id], onDelete: Cascade)
+  shares    ExpenseShare[]
   createdAt DateTime @default(now())
+}
+
+// Part d'une dépense due par un participant (modèle façon Tricount).
+// Pour une dépense "perso", il y a une seule part = le payeur lui-même.
+// Pour une dépense de groupe, une part par participant concerné.
+model ExpenseShare {
+  id        String  @id @default(cuid())
+  expenseId String
+  userId    String
+  amount    Float
+  expense   Expense @relation(fields: [expenseId], references: [id], onDelete: Cascade)
+  user      User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([expenseId, userId])
+  @@index([userId])
 }
 
 // Cache des suggestions IA par destination (évite de rappeler Groq)
