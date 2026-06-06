@@ -1,5 +1,5 @@
 import api from './api';
-import { Trip, Expense, ExpenseInput, Location, CurrencyBalance, TripParticipant } from '../types';
+import { Trip, Expense, ExpenseInput, Location, CurrencyBalance, TripParticipant, PlannerActivity, PlannerActivityInput } from '../types';
 
 export const tripsService = {
   getAll: () => api.get<Trip[]>('/trips').then(r => r.data),
@@ -26,4 +26,11 @@ export const tripsService = {
   createLocation: (tripId: string, data: Partial<Location>) =>
     api.post<Location>(`/trips/${tripId}/locations`, data).then(r => r.data),
   deleteLocation: (tripId: string, lid: string) => api.delete(`/trips/${tripId}/locations/${lid}`),
+
+  getPlanner: (tripId: string) => api.get<PlannerActivity[]>(`/trips/${tripId}/planner`).then(r => r.data),
+  createPlannerActivity: (tripId: string, data: PlannerActivityInput) =>
+    api.post<PlannerActivity>(`/trips/${tripId}/planner`, data).then(r => r.data),
+  updatePlannerActivity: (tripId: string, aid: string, data: Partial<PlannerActivityInput>) =>
+    api.put<PlannerActivity>(`/trips/${tripId}/planner/${aid}`, data).then(r => r.data),
+  deletePlannerActivity: (tripId: string, aid: string) => api.delete(`/trips/${tripId}/planner/${aid}`),
 };

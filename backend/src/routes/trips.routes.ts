@@ -3,11 +3,13 @@ import { getTrips, getTrip, createTrip, updateTrip, deleteTrip } from '../contro
 import { getExpenses, createExpense, updateExpense, deleteExpense, getBalances } from '../controllers/expenses.controller';
 import { getLocations, createLocation, deleteLocation } from '../controllers/locations.controller';
 import { inviteParticipant, removeParticipant } from '../controllers/participants.controller';
+import { getPlanner, createPlannerActivity, updatePlannerActivity, deletePlannerActivity } from '../controllers/planner.controller';
 import { validate } from '../middleware/validate.middleware';
 import { authenticate } from '../middleware/auth.middleware';
 import { CreateTripDTO, UpdateTripDTO, CreateLocationDTO } from '../dtos/trip.dto';
 import { CreateExpenseDTO, UpdateExpenseDTO } from '../dtos/expense.dto';
 import { InviteParticipantDTO } from '../dtos/participant.dto';
+import { CreatePlannerActivityDTO, UpdatePlannerActivityDTO } from '../dtos/planner.dto';
 
 const router = Router();
 router.use(authenticate);
@@ -26,6 +28,11 @@ router.get('/:tripId/balances', getBalances);
 
 router.post('/:tripId/participants', validate(InviteParticipantDTO), inviteParticipant);
 router.delete('/:tripId/participants/:userId', removeParticipant);
+
+router.get('/:tripId/planner', getPlanner);
+router.post('/:tripId/planner', validate(CreatePlannerActivityDTO), createPlannerActivity);
+router.put('/:tripId/planner/:aid', validate(UpdatePlannerActivityDTO), updatePlannerActivity);
+router.delete('/:tripId/planner/:aid', deletePlannerActivity);
 
 router.get('/:tripId/locations', getLocations);
 router.post('/:tripId/locations', validate(CreateLocationDTO), createLocation);
