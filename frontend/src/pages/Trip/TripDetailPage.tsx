@@ -1,18 +1,26 @@
-import { useState } from 'react';
+import { useState, lazy, Suspense } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { ArrowLeft, Calendar, MapPin, Users, Pencil, Trash2, Plus, UserPlus, ArrowRight, Wallet, X, Check } from 'lucide-react';
+import { ArrowLeft, Calendar, MapPin, Users, Pencil, Trash2, Plus, UserPlus, ArrowRight, Wallet, X, Check, Loader2 } from 'lucide-react';
 import { tripsService } from '../../services/trips.service';
 import { aiService } from '../../services/ai.service';
 import { Button } from '../../components/ui/Button';
 import { Input } from '../../components/ui/Input';
 import { Modal } from '../../components/ui/Modal';
 import { TripForm } from '../../components/features/TripForm';
-import { MapView } from '../../components/features/MapView';
-import { ExpenseChart } from '../../components/features/ExpenseChart';
 import { ExpenseForm } from '../../components/features/ExpenseForm';
-import { TripPlanner } from '../../components/features/TripPlanner';
 import { Badge } from '../../components/ui/Badge';
+
+// Composants lourds chargés à la demande (Leaflet, recharts, framer-motion)
+const MapView = lazy(() => import('../../components/features/MapView').then(m => ({ default: m.MapView })));
+const ExpenseChart = lazy(() => import('../../components/features/ExpenseChart').then(m => ({ default: m.ExpenseChart })));
+const TripPlanner = lazy(() => import('../../components/features/TripPlanner').then(m => ({ default: m.TripPlanner })));
+
+const LazyFallback = ({ h = 'h-48' }: { h?: string }) => (
+  <div className={`${h} flex items-center justify-center text-gray-300`}>
+    <Loader2 className="animate-spin" size={24} />
+  </div>
+);
 import { useAuth } from '../../contexts/AuthContext';
 import { resolveCoverImage } from '../../utils/imageUrl';
 import { Expense, ExpenseInput, Location, Trip } from '../../types';
@@ -302,7 +310,9 @@ export const TripDetailPage = () => {
               <h3 className="font-semibold text-gray-900 mb-4">Dépenses par catégorie</h3>
               {realExpenses.length > 0 ? (
                 <>
-                  <ExpenseChart expenses={realExpenses} />
+                  <Suspense fallback={<LazyFallback />}>
+                    <ExpenseChart expenses={realExpenses} />
+                  </Suspense>
                   <p className="text-center text-sm font-bold text-gray-800 mt-2">
                     Total : {totalExpenses.toFixed(2)} €
                   </p>
@@ -420,13 +430,15 @@ export const TripDetailPage = () => {
         {activeTab === 'planner' && (
           <div className="card">
             <h3 className="font-semibold text-gray-900 mb-4">Planning jour par jour</h3>
-            <TripPlanner
-              tripId={trip.id}
-              startDate={trip.startDate}
-              endDate={trip.endDate}
-              currentUserId={user?.id ?? ''}
-              isOwner={isOwner}
-            />
+            <Suspense fallback={<LazyFallback h="h-64" />}>
+              <TripPlanner
+                tripId={trip.id}
+                startDate={trip.startDate}
+                endDate={trip.endDate}
+                currentUserId={user?.id ?? ''}
+                isOwner={isOwner}
+              />
+            </Suspense>
           </div>
         )}
 
@@ -439,15 +451,17 @@ export const TripDetailPage = () => {
                 <span className="text-gray-400 font-normal ml-2">({trip.locations.length} lieux)</span>
               )}
             </h3>
-            <MapView
-              locations={trip.locations ?? []}
-              destination={trip.destination}
-              onAdd={(loc) => addLocationMutation.mutate(loc)}
-              onDelete={(lid) => deleteLocationMutation.mutate(lid)}
-              canEdit={true}
-              tripId={trip.id}
-              currentUserId={user?.id ?? ''}
-            />
+            <Suspense fallback={<LazyFallback h="h-96" />}>
+              <MapView
+                locations={trip.locations ?? []}
+                destination={trip.destination}
+                onAdd={(loc) => addLocationMutation.mutate(loc)}
+                onDelete={(lid) => deleteLocationMutation.mutate(lid)}
+                canEdit={true}
+                tripId={trip.id}
+                currentUserId={user?.id ?? ''}
+              />
+            </Suspense>
           </div>
         )}
       </div>
