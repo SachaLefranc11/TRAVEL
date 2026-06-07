@@ -23,6 +23,24 @@ model User {
   settlementsTo   Settlement[] @relation("SettlementTo")
   plannerLogs     PlannerActivityLog[]
   notifications   Notification[]
+  positions       ParticipantLocation[]
+}
+
+// Position live d'un participant (partage opt-in, éphémère).
+// La présence d'une ligne = partage actif ; supprimée quand l'utilisateur le coupe.
+// La fraîcheur est jugée via updatedAt côté lecture (positions périmées ignorées).
+model ParticipantLocation {
+  id        String   @id @default(cuid())
+  tripId    String
+  userId    String
+  lat       Float
+  lng       Float
+  updatedAt DateTime @updatedAt
+  trip      Trip     @relation(fields: [tripId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([tripId, userId])
+  @@index([tripId])
 }
 
 // Notification in-app destinée à un utilisateur.
@@ -70,6 +88,7 @@ model Trip {
   plannerActivities PlannerActivity[]
   settlements  Settlement[]
   plannerLogs  PlannerActivityLog[]
+  positions    ParticipantLocation[]
 }
 
 // Journal des modifications du planning (qui, quoi avant/après, quand).

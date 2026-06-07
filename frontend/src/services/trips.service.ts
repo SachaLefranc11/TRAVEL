@@ -1,5 +1,5 @@
 import api from './api';
-import { Trip, Expense, ExpenseInput, Location, CurrencyBalance, RecordedSettlement, TripParticipant, PlannerActivity, PlannerActivityInput, PlannerLog } from '../types';
+import { Trip, Expense, ExpenseInput, Location, CurrencyBalance, RecordedSettlement, TripParticipant, PlannerActivity, PlannerActivityInput, PlannerLog, LivePosition } from '../types';
 
 export const tripsService = {
   getAll: () => api.get<Trip[]>('/trips').then(r => r.data),
@@ -42,4 +42,10 @@ export const tripsService = {
 
   getPlannerLogs: (tripId: string) =>
     api.get<PlannerLog[]>(`/trips/${tripId}/planner/logs`).then(r => r.data),
+
+  getPositions: (tripId: string) =>
+    api.get<LivePosition[]>(`/trips/${tripId}/positions`).then(r => r.data),
+  sendPosition: (tripId: string, lat: number, lng: number) =>
+    api.post(`/trips/${tripId}/positions`, { lat, lng }),
+  stopSharingPosition: (tripId: string) => api.delete(`/trips/${tripId}/positions`),
 };
