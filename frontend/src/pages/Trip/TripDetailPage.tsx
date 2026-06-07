@@ -445,6 +445,8 @@ export const TripDetailPage = () => {
               onAdd={(loc) => addLocationMutation.mutate(loc)}
               onDelete={(lid) => deleteLocationMutation.mutate(lid)}
               canEdit={true}
+              tripId={trip.id}
+              currentUserId={user?.id ?? ''}
             />
           </div>
         )}

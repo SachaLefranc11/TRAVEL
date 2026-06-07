@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { AnimatePresence } from 'framer-motion';
-import { Plus, Clock, MapPin, Trash2, CalendarDays, History } from 'lucide-react';
+import { Plus, Clock, MapPin, Trash2, CalendarDays, History, Navigation } from 'lucide-react';
 import { tripsService } from '../../services/trips.service';
 import { PlannerActivity, PlannerActivityInput } from '../../types';
 import { Modal } from '../ui/Modal';
@@ -169,9 +169,19 @@ export const TripPlanner = ({ tripId, startDate, endDate, currentUserId, isOwner
                       </p>
                     )}
                     {a.location && (
-                      <p className="text-xs text-gray-500 mt-0.5 flex items-center gap-1">
-                        <MapPin size={11} />{a.location}
-                      </p>
+                      <>
+                        <p className="text-xs text-gray-500 mt-0.5 flex items-center gap-1">
+                          <MapPin size={11} />{a.location}
+                        </p>
+                        <a
+                          href={`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(a.location)}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="mt-1 inline-flex items-center gap-1 text-[11px] text-primary-600 hover:underline"
+                        >
+                          <Navigation size={11} /> Itinéraire
+                        </a>
+                      </>
                     )}
                     {a.description && <p className="text-xs text-gray-400 mt-1 leading-snug">{a.description}</p>}
                     <p className="text-[10px] text-gray-300 mt-1.5">par {a.createdBy.name}</p>
