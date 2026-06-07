@@ -146,6 +146,16 @@ export interface PlannerLog {
   user: Pick<User, 'id' | 'name' | 'avatar'>;
 }
 
+export interface LivePosition {
+  id: string;
+  tripId: string;
+  userId: string;
+  lat: number;
+  lng: number;
+  updatedAt: string;
+  user: Pick<User, 'id' | 'name' | 'avatar'>;
+}
+
 export interface Notification {
   id: string;
   userId: string;
