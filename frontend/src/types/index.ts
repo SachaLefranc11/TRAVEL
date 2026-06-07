@@ -133,6 +133,19 @@ export interface PlannerActivityInput {
   location?: string;
 }
 
+export interface PlannerLog {
+  id: string;
+  tripId: string;
+  activityId?: string | null;
+  action: 'CREATE' | 'UPDATE' | 'DELETE';
+  userId: string;
+  activityTitle: string;
+  before?: string | null;
+  after?: string | null;
+  createdAt: string;
+  user: Pick<User, 'id' | 'name' | 'avatar'>;
+}
+
 export interface AuthResponse {
   token: string;
   user: User;
