@@ -1,6 +1,7 @@
 import { Response } from 'express';
 import prisma from '../services/prisma.service';
 import { AuthRequest } from '../middleware/auth.middleware';
+import { notifyTripMembers } from '../services/notifications.service';
 
 const isMember = (tripId: string, userId: string) =>
   prisma.tripParticipant.findFirst({ where: { tripId, userId } });
@@ -56,6 +57,12 @@ export const createPlannerActivity = async (req: AuthRequest, res: Response) => 
     },
   });
 
+  await notifyTripMembers(tripId, req.userId!, {
+    type: 'PLANNER',
+    message: `${activity.createdBy.name} a ajouté l'activité « ${activity.title} » au planning`,
+    tripId,
+  });
+
   res.status(201).json(activity);
 };
 
@@ -88,6 +95,13 @@ export const updatePlannerActivity = async (req: AuthRequest, res: Response) => 
       tripId, activityId: aid, action: 'UPDATE', userId: req.userId!,
       activityTitle: updated.title, before, after: snapshot(updated),
     },
+  });
+
+  const editor = await prisma.user.findUnique({ where: { id: req.userId! }, select: { name: true } });
+  await notifyTripMembers(tripId, req.userId!, {
+    type: 'PLANNER',
+    message: `${editor?.name ?? 'Un participant'} a modifié l'activité « ${updated.title} »`,
+    tripId,
   });
 
   res.json(updated);

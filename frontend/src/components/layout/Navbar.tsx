@@ -1,6 +1,7 @@
 import { Link, useNavigate } from 'react-router-dom';
 import { Plane, LogOut, User } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
+import { NotificationBell } from '../features/NotificationBell';
 
 export const Navbar = () => {
   const { user, logout } = useAuth();
@@ -17,6 +18,7 @@ export const Navbar = () => {
             <span>Travel</span>
           </Link>
           <div className="flex items-center gap-3">
+            <NotificationBell />
             <div className="flex items-center gap-2 text-sm text-gray-600">
               <div className="w-8 h-8 rounded-full bg-primary-100 flex items-center justify-center">
                 <User size={16} className="text-primary-600" />
