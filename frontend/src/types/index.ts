@@ -16,6 +16,7 @@ export interface Trip {
   description?: string;
   createdAt: string;
   ownerId: string;
+  aiSuggestionsGenerated?: boolean;
   participants: TripParticipant[];
   expenses?: Expense[];
   locations?: Location[];

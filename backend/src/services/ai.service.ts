@@ -15,8 +15,10 @@ export const AIService = {
 
   getDestinationImage: async (destination: string): Promise<string | null> => {
     try {
+      // Détecte le type (ville/île/région/pays) pour cibler l'image emblématique
+      const geo = await geocodeDestination(destination).catch(() => null);
       return await Promise.race([
-        searchDestinationImage(destination),
+        searchDestinationImage(destination, geo?.kind),
         new Promise<null>((resolve) => setTimeout(() => resolve(null), 10000)),
       ]);
     } catch {
@@ -56,15 +58,14 @@ export const AIService = {
     // ── 2. Appel Groq ─────────────────────────────────────────────────
     console.log(`[AIService] Cache MISS pour "${key}" — appel Groq`);
 
-    // Géolocalisation en parallèle pendant que Groq répond
-    const [coords, activities] = await Promise.all([
-      geocodeDestination(destination).catch(() => null),
-      Promise.race([
-        getActivitiesForDestination(destination),
-        new Promise<ActivitySuggestion[]>((_resolve, reject) =>
-          setTimeout(() => reject(new Error('TIMEOUT: Groq a mis trop de temps (>25s)')), 25000)
-        ),
-      ]),
+    // On géocode d'abord pour connaître le type de destination (ville/île/pays…)
+    // afin d'adapter le prompt IA à toute la zone géographique.
+    const coords = await geocodeDestination(destination).catch(() => null);
+    const activities = await Promise.race([
+      getActivitiesForDestination(destination, coords?.kind),
+      new Promise<ActivitySuggestion[]>((_resolve, reject) =>
+        setTimeout(() => reject(new Error('TIMEOUT: Groq a mis trop de temps (>25s)')), 25000)
+      ),
     ]);
 
     if (activities.length === 0) return [];

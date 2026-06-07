@@ -11,6 +11,10 @@ const TYPE_LABELS: Record<LocationType, string> = {
   ATTRACTION: 'Attraction', RESTAURANT: 'Restaurant', HOTEL: 'Hôtel', ACTIVITY: 'Activité', OTHER: 'Autre',
 };
 
+/** Lien Google Maps directions (origin optionnel "lat,lng"). */
+const mapsDirUrl = (lat: number, lng: number, originStr?: string) =>
+  `https://www.google.com/maps/dir/?api=1${originStr ? `&origin=${originStr}` : ''}&destination=${lat},${lng}`;
+
 interface Props {
   locations: Location[];
   positions: LivePosition[];
@@ -96,6 +100,10 @@ export const FullscreenMap = ({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Point de départ des itinéraires = position live de l'utilisateur si dispo
+  const selfPos = positions.find((p) => p.userId === currentUserId);
+  const originStr = selfPos ? `${selfPos.lat},${selfPos.lng}` : '';
+
   // Marqueurs des lieux (synchronisés avec la prop locations)
   useEffect(() => {
     if (!ready || !mapInstance.current) return;
@@ -113,11 +121,12 @@ export const FullscreenMap = ({
             <b style="font-size:14px">${loc.name}</b><br/>
             <span style="color:#666;font-size:11px;text-transform:uppercase;letter-spacing:.5px">${TYPE_LABELS[loc.type as LocationType] ?? loc.type}</span>
             ${loc.description ? `<p style="margin:6px 0 0;font-size:12px;color:#444">${loc.description}</p>` : ''}
+            <a href="${mapsDirUrl(loc.lat, loc.lng, originStr)}" target="_blank" rel="noopener noreferrer" style="display:inline-flex;align-items:center;gap:4px;margin-top:8px;color:#4f46e5;font-weight:600;font-size:12px;text-decoration:none">➤ Itinéraire</a>
           </div>`);
         locMarkersRef.current.push(marker);
       });
     });
-  }, [ready, locations]);
+  }, [ready, locations, originStr]);
 
   // Marqueurs des positions live des participants (synchronisés avec la prop positions)
   useEffect(() => {
@@ -166,16 +175,18 @@ export const FullscreenMap = ({
     >
       {/* Poignée de glissement (swipe-down pour fermer, mobile) */}
       <div
-        className="absolute top-0 left-0 right-0 z-[3] flex justify-center pt-2 pb-4 cursor-grab active:cursor-grabbing touch-none"
+        className="absolute top-0 left-0 right-0 z-[20] flex justify-center pt-2 pb-4 cursor-grab active:cursor-grabbing touch-none"
         onPointerDown={(e) => dragControls.start(e)}
       >
         <div className="w-12 h-1.5 rounded-full bg-white/70 shadow" />
       </div>
 
-      {/* Carte (révélation en fondu) */}
+      {/* Carte (révélation en fondu). zIndex:0 => contexte d'empilement isolé :
+          les panes Leaflet ne peuvent plus passer au-dessus des boutons (z-[20]). */}
       <motion.div
         ref={mapRef}
         className="absolute inset-0"
+        style={{ zIndex: 0 }}
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         transition={{ duration: 0.6, delay: 0.15 }}
@@ -184,7 +195,7 @@ export const FullscreenMap = ({
       {/* Bouton Retour (haut gauche) */}
       <motion.button
         onClick={onClose}
-        className="absolute top-4 left-4 z-[3] flex items-center gap-1.5 bg-white text-gray-800 px-3.5 py-2 rounded-full shadow-xl hover:bg-gray-50 font-medium text-sm"
+        className="absolute top-4 left-4 z-[20] flex items-center gap-1.5 bg-white text-gray-800 px-3.5 py-2 rounded-full shadow-xl hover:bg-gray-50 font-medium text-sm"
         initial={{ opacity: 0, x: -20 }}
         animate={{ opacity: 1, x: 0 }}
         exit={{ opacity: 0, x: -20 }}
@@ -196,7 +207,7 @@ export const FullscreenMap = ({
       {/* Infos destination (sous le bouton retour) */}
       {destination && (
         <motion.div
-          className="absolute top-16 left-4 z-[3] bg-white/90 backdrop-blur px-4 py-2 rounded-xl shadow-lg"
+          className="absolute top-16 left-4 z-[20] bg-white/90 backdrop-blur px-4 py-2 rounded-xl shadow-lg"
           initial={{ opacity: 0, x: -20 }}
           animate={{ opacity: 1, x: 0 }}
           transition={{ delay: 0.35 }}
@@ -208,14 +219,14 @@ export const FullscreenMap = ({
 
       {/* Hint ajout de lieu */}
       {canEdit && (
-        <div className="absolute bottom-6 left-4 z-[3] bg-white/85 backdrop-blur text-gray-600 text-xs px-3 py-2 rounded-lg shadow">
+        <div className="absolute bottom-6 left-4 z-[20] bg-white/85 backdrop-blur text-gray-600 text-xs px-3 py-2 rounded-lg shadow">
           <MapPin size={12} className="inline mr-1" />Cliquez sur la carte pour ajouter un lieu
         </div>
       )}
 
       {/* Boutons flottants (cascade) — parité avec la vue normale */}
       <motion.div
-        className="absolute bottom-6 right-6 z-[3] flex flex-col gap-3"
+        className="absolute bottom-6 right-6 z-[20] flex flex-col gap-3"
         variants={fabContainer}
         initial="hidden"
         animate="visible"

@@ -82,8 +82,24 @@ const createWithRetry = async (
  * Utilise Groq (Llama 3.3 70B) pour générer une liste d'activités/lieux
  * incontournables pour une destination donnée, AVEC leurs coordonnées GPS.
  */
+type DestinationKind = 'city' | 'island' | 'region' | 'country' | 'place';
+
+const scopeHint = (destination: string, kind?: DestinationKind): string => {
+  switch (kind) {
+    case 'island':
+      return `"${destination}" est une ÎLE : répartis les lieux sur TOUTE l'île (plages, randonnées, sites naturels et volcans, points de vue, villages typiques), pas seulement la ville principale.`;
+    case 'country':
+      return `"${destination}" est un PAYS : propose des lieux emblématiques répartis dans TOUT le pays (monuments, villes incontournables, parcs et paysages, expériences culturelles), pas seulement la capitale.`;
+    case 'region':
+      return `"${destination}" est une RÉGION : répartis les lieux sur TOUTE la région, pas seulement sa ville principale.`;
+    default:
+      return `Propose des lieux incontournables à "${destination}" et dans ses environs proches.`;
+  }
+};
+
 export const getActivitiesForDestination = async (
   destination: string,
+  kind?: DestinationKind,
 ): Promise<ActivitySuggestion[]> => {
   if (!KEY || KEY.startsWith('PLACEHOLDER')) {
     throw new Error('INVALID_KEY: Clé GROQ_API_KEY manquante dans le fichier .env');
@@ -103,6 +119,8 @@ export const getActivitiesForDestination = async (
       {
         role: 'user',
         content: `Pour la destination "${destination}", génère 15 lieux incontournables à visiter (attractions, restaurants, activités, monuments, parcs, musées).
+
+${scopeHint(destination, kind)}
 
 Réponds avec un objet JSON de cette forme exacte :
 {

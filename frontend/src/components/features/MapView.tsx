@@ -8,7 +8,7 @@ import { Button } from '../ui/Button';
 import { Modal } from '../ui/Modal';
 import { Input } from '../ui/Input';
 import { FullscreenMap } from './FullscreenMap';
-import { aiService, ActivitySuggestion } from '../../services/ai.service';
+import { aiService } from '../../services/ai.service';
 import { tripsService } from '../../services/trips.service';
 
 const TYPE_COLORS: Record<LocationType, string> = {
@@ -36,9 +36,15 @@ interface Props {
   /** Active le partage de position live (nécessite l'identité de l'utilisateur). */
   tripId?: string;
   currentUserId?: string;
+  /** Masque le bouton « Suggestions IA » si elles ont déjà été générées. */
+  aiAlreadyGenerated?: boolean;
 }
 
-export const MapView = ({ locations, destination, onAdd, onDelete, canEdit, tripId, currentUserId }: Props) => {
+/** Lien Google Maps directions (origin optionnel "lat,lng"). */
+const mapsDirUrl = (lat: number, lng: number, originStr?: string) =>
+  `https://www.google.com/maps/dir/?api=1${originStr ? `&origin=${originStr}` : ''}&destination=${lat},${lng}`;
+
+export const MapView = ({ locations, destination, onAdd, onDelete, canEdit, tripId, currentUserId, aiAlreadyGenerated }: Props) => {
   const qc = useQueryClient();
   const mapRef = useRef<HTMLDivElement>(null);
   const mapInstanceRef = useRef<any>(null);
@@ -56,6 +62,9 @@ export const MapView = ({ locations, destination, onAdd, onDelete, canEdit, trip
     enabled: !!tripId,
     refetchInterval: 30000,
   });
+  // Position de l'utilisateur (utilisée comme point de départ des itinéraires)
+  const myPos = positions.find((p) => p.userId === currentUserId);
+  const myPosStr = myPos ? `${myPos.lat},${myPos.lng}` : '';
   const [clickCoords, setClickCoords] = useState<{ lat: number; lng: number } | null>(null);
   const [newLoc, setNewLoc] = useState({ name: '', type: 'ATTRACTION' as LocationType, description: '' });
   const [loadingAI, setLoadingAI] = useState(false);
@@ -78,7 +87,7 @@ export const MapView = ({ locations, destination, onAdd, onDelete, canEdit, trip
     }
   }, []);
 
-  const addMarkersToMap = useCallback((L: any, map: any, locs: Location[]) => {
+  const addMarkersToMap = useCallback((L: any, map: any, locs: Location[], originStr?: string) => {
     markersRef.current.forEach(m => m.remove());
     markersRef.current = [];
     locs.forEach(loc => {
@@ -97,6 +106,7 @@ export const MapView = ({ locations, destination, onAdd, onDelete, canEdit, trip
             <span style="color:#666;font-size:11px;font-weight:500;text-transform:uppercase;letter-spacing:.5px">${TYPE_LABELS[loc.type as LocationType] ?? loc.type}</span>
             ${loc.description ? `<p style="margin:6px 0 0;font-size:12px;color:#444;line-height:1.4">${loc.description}</p>` : ''}
             ${(loc as any).address ? `<p style="margin:5px 0 0;font-size:11px;color:#888;display:flex;align-items:flex-start;gap:3px"><span>📍</span><span>${(loc as any).address}</span></p>` : ''}
+            <a href="${mapsDirUrl(loc.lat, loc.lng, originStr)}" target="_blank" rel="noopener noreferrer" style="display:inline-flex;align-items:center;gap:4px;margin-top:8px;color:#4f46e5;font-weight:600;font-size:12px;text-decoration:none">➤ Itinéraire</a>
           </div>
         `);
       markersRef.current.push(marker);
@@ -147,7 +157,7 @@ export const MapView = ({ locations, destination, onAdd, onDelete, canEdit, trip
       }).addTo(map);
 
       mapInstanceRef.current = map;
-      addMarkersToMap(L, map, locations);
+      addMarkersToMap(L, map, locations, myPosStr);
 
       if (canEdit) {
         map.on('click', (e: any) => {
@@ -173,11 +183,11 @@ export const MapView = ({ locations, destination, onAdd, onDelete, canEdit, trip
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Mise à jour des marqueurs quand locations change
+  // Mise à jour des marqueurs quand locations (ou la position de départ) change
   useEffect(() => {
     if (!mapInstanceRef.current) return;
-    import('leaflet').then(L => addMarkersToMap(L, mapInstanceRef.current, locations));
-  }, [locations, addMarkersToMap]);
+    import('leaflet').then(L => addMarkersToMap(L, mapInstanceRef.current, locations, myPosStr));
+  }, [locations, myPosStr, addMarkersToMap]);
 
   // Mise à jour des marqueurs de position live
   useEffect(() => {
@@ -219,41 +229,21 @@ export const MapView = ({ locations, destination, onAdd, onDelete, canEdit, trip
     }
   };
 
-  // Suggestions IA — charge les activités et les ajoute comme lieux
+  // Suggestions IA — génération côté serveur (une seule fois par voyage)
   const handleAISuggestions = async () => {
-    if (!destination) { setAiError('Destination non définie'); return; }
+    if (!tripId) { setAiError('Voyage non identifié'); return; }
     setLoadingAI(true);
     setAiError('');
     try {
-      const { activities } = await aiService.getActivities(destination);
-      if (activities.length === 0) {
-        setAiError('Aucune suggestion trouvée pour cette destination');
-        return;
-      }
-      // Centrer la carte sur la destination
-      if (mapInstanceRef.current) {
-        const result = await aiService.geocode(destination);
+      await tripsService.generateAiLocations(tripId);
+      // Rafraîchit le voyage (nouveaux lieux + flag aiSuggestionsGenerated)
+      qc.invalidateQueries({ queryKey: ['trip', tripId] });
+      if (destination && mapInstanceRef.current) {
+        const result = await aiService.geocode(destination).catch(() => null);
         if (result) mapInstanceRef.current.setView([result.lat, result.lng], result.zoom, { animate: true });
       }
-      // Ajouter chaque activité comme location
-      activities.forEach((act: ActivitySuggestion) => {
-        if (act.lat && act.lng && onAdd) {
-          onAdd({
-            name: act.name,
-            type: act.category as LocationType,
-            lat: act.lat,
-            lng: act.lng,
-            description: act.description,
-            address: act.address,
-          } as any);
-        }
-      });
     } catch (err: any) {
-      const msg: string =
-        err?.response?.data?.error ??
-        err?.message ??
-        'Erreur lors du chargement des suggestions IA';
-      setAiError(msg);
+      setAiError(err?.response?.data?.error ?? err?.message ?? 'Erreur lors des suggestions IA');
     } finally {
       setLoadingAI(false);
     }
@@ -272,16 +262,18 @@ export const MapView = ({ locations, destination, onAdd, onDelete, canEdit, trip
       {/* Toolbar */}
       {canEdit && (
         <div className="flex items-center gap-3 flex-wrap">
-          <Button
-            size="sm"
-            variant="secondary"
-            icon={loadingAI ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />}
-            onClick={handleAISuggestions}
-            loading={loadingAI}
-            disabled={!destination}
-          >
-            Suggestions IA
-          </Button>
+          {!aiAlreadyGenerated && (
+            <Button
+              size="sm"
+              variant="secondary"
+              icon={loadingAI ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />}
+              onClick={handleAISuggestions}
+              loading={loadingAI}
+              disabled={!tripId}
+            >
+              Suggestions IA
+            </Button>
+          )}
           {geocoding && (
             <span className="text-xs text-gray-500 flex items-center gap-1">
               <Loader2 size={12} className="animate-spin" /> Localisation en cours…

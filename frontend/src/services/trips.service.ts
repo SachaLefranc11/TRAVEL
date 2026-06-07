@@ -43,6 +43,9 @@ export const tripsService = {
   getPlannerLogs: (tripId: string) =>
     api.get<PlannerLog[]>(`/trips/${tripId}/planner/logs`).then(r => r.data),
 
+  generateAiLocations: (tripId: string) =>
+    api.post<{ locations: Location[] }>(`/trips/${tripId}/ai-locations`).then(r => r.data),
+
   getPositions: (tripId: string) =>
     api.get<LivePosition[]>(`/trips/${tripId}/positions`).then(r => r.data),
   sendPosition: (tripId: string, lat: number, lng: number) =>

@@ -43,10 +43,19 @@ export const geocodeDestination = async (destination: string): Promise<GeocodeRe
     const r    = data[0];
     const lat  = parseFloat(r.lat);
     const lng  = parseFloat(r.lon);
-    const type: string = r.type ?? '';
-    const zoom = ['city', 'town', 'village'].includes(type) ? 12
-      : ['country', 'state'].includes(type) ? 6 : 13;
-    return { lat, lng, displayName: r.display_name, zoom };
+    const type: string = (r.type ?? '').toLowerCase();
+    const addrtype: string = (r.addresstype ?? '').toLowerCase();
+
+    // Type de destination → adapte prompts IA + recherche d'image
+    const kind: GeocodeResponse['kind'] =
+      (type === 'country' || addrtype === 'country') ? 'country'
+      : (type === 'island' || addrtype === 'island') ? 'island'
+      : (['state', 'region', 'province', 'county'].includes(type) || addrtype === 'state') ? 'region'
+      : (['city', 'town', 'village', 'municipality', 'hamlet'].includes(type) || ['city', 'town', 'village'].includes(addrtype)) ? 'city'
+      : 'place';
+
+    const zoom = kind === 'city' ? 12 : (kind === 'country' || kind === 'region') ? 6 : kind === 'island' ? 10 : 13;
+    return { lat, lng, displayName: r.display_name, zoom, kind };
   } catch (err: any) {
     console.error('[Geocoding] Nominatim:', err?.message);
     return null;
