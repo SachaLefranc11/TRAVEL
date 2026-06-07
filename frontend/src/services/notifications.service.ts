@@ -12,8 +12,9 @@ export const notificationsService = {
   /**
    * Abonnement SSE via fetch (token dans l'en-tête Authorization, pas dans l'URL).
    * Se reconnecte automatiquement tant qu'on n'a pas appelé la fonction de nettoyage.
+   * `onMessage` reçoit le payload JSON de l'évènement.
    */
-  subscribe: (onMessage: () => void): (() => void) => {
+  subscribe: (onMessage: (data: any) => void): (() => void) => {
     const controller = new AbortController();
     let stopped = false;
 
@@ -37,7 +38,11 @@ export const notificationsService = {
               const chunks = buf.split('\n\n');
               buf = chunks.pop() ?? '';
               for (const c of chunks) {
-                if (c.split('\n').some((line) => line.startsWith('data:'))) onMessage();
+                const dataLine = c.split('\n').find((line) => line.startsWith('data:'));
+                if (dataLine) {
+                  const raw = dataLine.slice(5).trim();
+                  try { onMessage(JSON.parse(raw)); } catch { onMessage({}); }
+                }
               }
             }
           }

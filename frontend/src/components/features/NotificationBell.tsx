@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Bell, Plane, Receipt, CalendarClock } from 'lucide-react';
 import { notificationsService } from '../../services/notifications.service';
@@ -30,14 +30,8 @@ export const NotificationBell = () => {
     refetchOnWindowFocus: true,
   });
 
-  // Flux temps réel : à chaque évènement, on rafraîchit la liste
-  useEffect(() => {
-    const unsubscribe = notificationsService.subscribe(() => {
-      qc.invalidateQueries({ queryKey: ['notifications'] });
-    });
-    return unsubscribe;
-  }, [qc]);
-
+  // Le flux SSE est géré globalement par useRealtimeSync (AppLayout) qui
+  // invalide la query ['notifications'] — pas besoin d'un 2e abonnement ici.
   const unread = notifications.filter((n) => !n.read).length;
 
   const handleOpen = async () => {

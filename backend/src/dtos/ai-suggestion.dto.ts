@@ -19,6 +19,7 @@ export const GeocodeResponseDTO = z.object({
   lng: z.number(),
   displayName: z.string(),
   zoom: z.number(),
+  kind: z.enum(['city', 'island', 'region', 'country', 'place']).default('place'),
 });
 
 export type ActivitySuggestion = z.infer<typeof ActivitySuggestionDTO>;

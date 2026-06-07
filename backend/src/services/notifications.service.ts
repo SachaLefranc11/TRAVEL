@@ -57,3 +57,18 @@ export const notifyTripMembers = async (tripId: string, exceptUserId: string, n:
   const members = await prisma.tripParticipant.findMany({ where: { tripId }, select: { userId: true } });
   await notify(members.map((m) => m.userId).filter((uid) => uid !== exceptUserId), n);
 };
+
+/**
+ * Émet un évènement SSE éphémère (sans persistance) aux membres d'un voyage —
+ * sert à déclencher un rafraîchissement temps réel (ex : positions live).
+ */
+export const broadcastToTripMembers = async (
+  tripId: string,
+  exceptUserId: string,
+  data: Record<string, unknown>,
+) => {
+  const members = await prisma.tripParticipant.findMany({ where: { tripId }, select: { userId: true } });
+  for (const m of members) {
+    if (m.userId !== exceptUserId) sendEvent(m.userId, data);
+  }
+};

@@ -1,6 +1,7 @@
 import { Response } from 'express';
 import prisma from '../services/prisma.service';
 import { AuthRequest } from '../middleware/auth.middleware';
+import { broadcastToTripMembers } from '../services/notifications.service';
 
 const isMember = (tripId: string, userId: string) =>
   prisma.tripParticipant.findFirst({ where: { tripId, userId } });
@@ -36,6 +37,8 @@ export const upsertPosition = async (req: AuthRequest, res: Response) => {
     update: { lat, lng },
     include: { user: { select: userSel } },
   });
+  // Signale aux autres membres de rafraîchir les marqueurs (temps réel)
+  await broadcastToTripMembers(tripId, req.userId!, { kind: 'positions', tripId });
   res.json(pos);
 };
 
@@ -43,5 +46,6 @@ export const upsertPosition = async (req: AuthRequest, res: Response) => {
 export const stopSharing = async (req: AuthRequest, res: Response) => {
   const tripId = req.params.tripId as string;
   await prisma.participantLocation.deleteMany({ where: { tripId, userId: req.userId! } });
+  await broadcastToTripMembers(tripId, req.userId!, { kind: 'positions', tripId });
   res.status(204).send();
 };

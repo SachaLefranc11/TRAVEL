@@ -33,7 +33,21 @@ const runSearch = async (key: string, query: string): Promise<string | null> => 
  * Essaie une requête ciblée « ville/paysage », puis retombe sur le nom seul
  * (plus de chances de trouver une image qu'avec une requête trop spécifique).
  */
-export const searchDestinationImage = async (destination: string): Promise<string | null> => {
+type DestinationKind = 'city' | 'island' | 'region' | 'country' | 'place';
+
+const primaryQuery = (destination: string, kind?: DestinationKind): string => {
+  switch (kind) {
+    case 'island': return `${destination} island landscape coast nature`;
+    case 'country': return `${destination} landmark monument iconic scenery`;
+    case 'region': return `${destination} landscape scenery landmark`;
+    default: return `${destination} cityscape landmark`;
+  }
+};
+
+export const searchDestinationImage = async (
+  destination: string,
+  kind?: DestinationKind,
+): Promise<string | null> => {
   if (!KEY) {
     console.warn('[Unsplash] UNSPLASH_ACCESS_KEY manquant');
     return null;
@@ -41,7 +55,7 @@ export const searchDestinationImage = async (destination: string): Promise<strin
 
   try {
     return (
-      (await runSearch(KEY, `${destination} cityscape landmark`)) ??
+      (await runSearch(KEY, primaryQuery(destination, kind))) ??
       (await runSearch(KEY, destination))
     );
   } catch (err: any) {

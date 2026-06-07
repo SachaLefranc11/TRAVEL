@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { getTrips, getTrip, createTrip, updateTrip, deleteTrip } from '../controllers/trips.controller';
 import { getExpenses, createExpense, updateExpense, deleteExpense, getBalances } from '../controllers/expenses.controller';
-import { getLocations, createLocation, deleteLocation } from '../controllers/locations.controller';
+import { getLocations, createLocation, deleteLocation, generateAiLocations } from '../controllers/locations.controller';
 import { inviteParticipant, removeParticipant } from '../controllers/participants.controller';
 import { getPlanner, createPlannerActivity, updatePlannerActivity, deletePlannerActivity, getPlannerLogs } from '../controllers/planner.controller';
 import { getSettlements, createSettlement, deleteSettlement } from '../controllers/settlements.controller';
@@ -49,6 +49,7 @@ router.delete('/:tripId/planner/:aid', deletePlannerActivity);
 
 router.get('/:tripId/locations', getLocations);
 router.post('/:tripId/locations', validate(CreateLocationDTO), createLocation);
+router.post('/:tripId/ai-locations', generateAiLocations);
 router.delete('/:tripId/locations/:lid', deleteLocation);
 
 export default router;

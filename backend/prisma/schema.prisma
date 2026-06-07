@@ -82,6 +82,7 @@ model Trip {
   description  String?
   createdAt    DateTime          @default(now())
   ownerId      String
+  aiSuggestionsGenerated Boolean  @default(false)
   participants TripParticipant[]
   expenses     Expense[]
   locations    Location[]

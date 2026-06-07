@@ -460,6 +460,7 @@ export const TripDetailPage = () => {
                 canEdit={true}
                 tripId={trip.id}
                 currentUserId={user?.id ?? ''}
+                aiAlreadyGenerated={trip.aiSuggestionsGenerated}
               />
             </Suspense>
           </div>

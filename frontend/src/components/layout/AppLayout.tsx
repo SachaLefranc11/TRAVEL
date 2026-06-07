@@ -3,10 +3,12 @@ import { useQueryClient } from '@tanstack/react-query';
 import { WifiOff } from 'lucide-react';
 import { Navbar } from './Navbar';
 import { useOnlineStatus } from '../../hooks/useOnlineStatus';
+import { useRealtimeSync } from '../../hooks/useRealtimeSync';
 
 export const AppLayout = ({ children }: { children: ReactNode }) => {
   const online = useOnlineStatus();
   const qc = useQueryClient();
+  useRealtimeSync();
 
   // Resynchronisation auto au retour de la connexion
   useEffect(() => {
