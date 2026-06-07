@@ -22,6 +22,21 @@ model User {
   settlementsFrom Settlement[] @relation("SettlementFrom")
   settlementsTo   Settlement[] @relation("SettlementTo")
   plannerLogs     PlannerActivityLog[]
+  notifications   Notification[]
+}
+
+// Notification in-app destinée à un utilisateur.
+model Notification {
+  id        String   @id @default(cuid())
+  userId    String
+  type      String   // EXPENSE | PLANNER | INVITE
+  message   String
+  tripId    String?
+  read      Boolean  @default(false)
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
 }
 
 // Jetons de réinitialisation de mot de passe.

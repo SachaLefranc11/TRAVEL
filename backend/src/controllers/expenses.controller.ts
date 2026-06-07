@@ -2,6 +2,7 @@ import { Response } from 'express';
 import prisma from '../services/prisma.service';
 import { AuthRequest } from '../middleware/auth.middleware';
 import { canSeeExpense } from '../utils/expenseVisibility';
+import { notifyTripMembers } from '../services/notifications.service';
 
 const isMember = async (tripId: string, userId: string) =>
   prisma.tripParticipant.findFirst({ where: { tripId, userId } });
@@ -154,6 +155,15 @@ export const createExpense = async (req: AuthRequest, res: Response) => {
     return main;
   });
 
+  if (shared) {
+    const actor = await prisma.user.findUnique({ where: { id: req.userId! }, select: { name: true } });
+    await notifyTripMembers(tripId, req.userId!, {
+      type: 'EXPENSE',
+      message: `${actor?.name ?? 'Un participant'} a ajouté la dépense partagée « ${title} » (${amount} ${currency})`,
+      tripId,
+    });
+  }
+
   res.status(201).json(expense);
 };
 
@@ -233,6 +243,16 @@ export const updateExpense = async (req: AuthRequest, res: Response) => {
   });
 
   const updated = await prisma.expense.findUnique({ where: { id: eid }, include: expenseInclude });
+
+  if (shared) {
+    const actor = await prisma.user.findUnique({ where: { id: req.userId! }, select: { name: true } });
+    await notifyTripMembers(tripId, req.userId!, {
+      type: 'EXPENSE',
+      message: `${actor?.name ?? 'Un participant'} a modifié la dépense partagée « ${eff.title} »`,
+      tripId,
+    });
+  }
+
   res.json(updated);
 };
 
