@@ -33,7 +33,7 @@ export const Modal = ({ isOpen, onClose, title, children, size = 'md' }: Props) 
   return createPortal(
     <div
       className="fixed inset-0 flex items-center justify-center p-4"
-      style={{ zIndex: 9999 }}
+      style={{ zIndex: 10050 }}
       role="dialog"
       aria-modal="true"
     >
