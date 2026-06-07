@@ -46,6 +46,21 @@ export const TripPlanner = ({ tripId, startDate, endDate, currentUserId, isOwner
     queryFn: () => tripsService.getPlanner(tripId),
   });
 
+  // Position live de l'utilisateur (utilisée comme point de départ de l'itinéraire)
+  const { data: positions = [] } = useQuery({
+    queryKey: ['positions', tripId],
+    queryFn: () => tripsService.getPositions(tripId),
+    enabled: !!tripId,
+    refetchInterval: 30000,
+  });
+  const myPosition = positions.find(p => p.userId === currentUserId);
+
+  const itineraryUrl = (location: string) => {
+    const params = new URLSearchParams({ api: '1', destination: location });
+    if (myPosition) params.set('origin', `${myPosition.lat},${myPosition.lng}`);
+    return `https://www.google.com/maps/dir/?${params.toString()}`;
+  };
+
   const [addDay, setAddDay] = useState<string | null>(null);
   const [form, setForm] = useState<PlannerActivityInput>({ date: '', title: '' });
   const [showHistory, setShowHistory] = useState(false);
@@ -174,7 +189,7 @@ export const TripPlanner = ({ tripId, startDate, endDate, currentUserId, isOwner
                           <MapPin size={11} />{a.location}
                         </p>
                         <a
-                          href={`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(a.location)}`}
+                          href={itineraryUrl(a.location)}
                           target="_blank"
                           rel="noopener noreferrer"
                           className="mt-1 inline-flex items-center gap-1 text-[11px] text-primary-600 hover:underline"
