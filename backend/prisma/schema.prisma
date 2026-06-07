@@ -21,6 +21,7 @@ model User {
   plannerActivities PlannerActivity[]
   settlementsFrom Settlement[] @relation("SettlementFrom")
   settlementsTo   Settlement[] @relation("SettlementTo")
+  plannerLogs     PlannerActivityLog[]
 }
 
 // Jetons de réinitialisation de mot de passe.
@@ -53,6 +54,24 @@ model Trip {
   locations    Location[]
   plannerActivities PlannerActivity[]
   settlements  Settlement[]
+  plannerLogs  PlannerActivityLog[]
+}
+
+// Journal des modifications du planning (qui, quoi avant/après, quand).
+model PlannerActivityLog {
+  id            String   @id @default(cuid())
+  tripId        String
+  activityId    String?
+  action        String   // CREATE | UPDATE | DELETE
+  userId        String
+  activityTitle String
+  before        String?  // snapshot JSON avant (UPDATE/DELETE)
+  after         String?  // snapshot JSON après (CREATE/UPDATE)
+  createdAt     DateTime @default(now())
+  trip          Trip     @relation(fields: [tripId], references: [id], onDelete: Cascade)
+  user          User     @relation(fields: [userId], references: [id])
+
+  @@index([tripId])
 }
 
 // Remboursement enregistré entre deux participants (règle une dette).

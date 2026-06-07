@@ -3,7 +3,7 @@ import { getTrips, getTrip, createTrip, updateTrip, deleteTrip } from '../contro
 import { getExpenses, createExpense, updateExpense, deleteExpense, getBalances } from '../controllers/expenses.controller';
 import { getLocations, createLocation, deleteLocation } from '../controllers/locations.controller';
 import { inviteParticipant, removeParticipant } from '../controllers/participants.controller';
-import { getPlanner, createPlannerActivity, updatePlannerActivity, deletePlannerActivity } from '../controllers/planner.controller';
+import { getPlanner, createPlannerActivity, updatePlannerActivity, deletePlannerActivity, getPlannerLogs } from '../controllers/planner.controller';
 import { getSettlements, createSettlement, deleteSettlement } from '../controllers/settlements.controller';
 import { validate } from '../middleware/validate.middleware';
 import { authenticate } from '../middleware/auth.middleware';
@@ -36,6 +36,7 @@ router.post('/:tripId/participants', validate(InviteParticipantDTO), inviteParti
 router.delete('/:tripId/participants/:userId', removeParticipant);
 
 router.get('/:tripId/planner', getPlanner);
+router.get('/:tripId/planner/logs', getPlannerLogs);
 router.post('/:tripId/planner', validate(CreatePlannerActivityDTO), createPlannerActivity);
 router.put('/:tripId/planner/:aid', validate(UpdatePlannerActivityDTO), updatePlannerActivity);
 router.delete('/:tripId/planner/:aid', deletePlannerActivity);

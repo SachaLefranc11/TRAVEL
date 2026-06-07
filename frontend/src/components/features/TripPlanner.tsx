@@ -1,11 +1,13 @@
 import { useMemo, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Plus, Clock, MapPin, Trash2, CalendarDays } from 'lucide-react';
+import { AnimatePresence } from 'framer-motion';
+import { Plus, Clock, MapPin, Trash2, CalendarDays, History } from 'lucide-react';
 import { tripsService } from '../../services/trips.service';
 import { PlannerActivity, PlannerActivityInput } from '../../types';
 import { Modal } from '../ui/Modal';
 import { Input } from '../ui/Input';
 import { Button } from '../ui/Button';
+import { PlannerHistory } from './PlannerHistory';
 
 interface Props {
   tripId: string;
@@ -46,6 +48,7 @@ export const TripPlanner = ({ tripId, startDate, endDate, currentUserId, isOwner
 
   const [addDay, setAddDay] = useState<string | null>(null);
   const [form, setForm] = useState<PlannerActivityInput>({ date: '', title: '' });
+  const [showHistory, setShowHistory] = useState(false);
 
   const days = useMemo(() => enumerateDays(startDate, endDate), [startDate, endDate]);
 
@@ -78,7 +81,10 @@ export const TripPlanner = ({ tripId, startDate, endDate, currentUserId, isOwner
       return { previous };
     },
     onError: (_e, _v, ctx) => { if (ctx?.previous) qc.setQueryData(queryKey, ctx.previous); },
-    onSettled: () => qc.invalidateQueries({ queryKey }),
+    onSettled: () => {
+      qc.invalidateQueries({ queryKey });
+      qc.invalidateQueries({ queryKey: ['planner-logs', tripId] });
+    },
   });
 
   const deleteMutation = useMutation({
@@ -90,7 +96,10 @@ export const TripPlanner = ({ tripId, startDate, endDate, currentUserId, isOwner
       return { previous };
     },
     onError: (_e, _v, ctx) => { if (ctx?.previous) qc.setQueryData(queryKey, ctx.previous); },
-    onSettled: () => qc.invalidateQueries({ queryKey }),
+    onSettled: () => {
+      qc.invalidateQueries({ queryKey });
+      qc.invalidateQueries({ queryKey: ['planner-logs', tripId] });
+    },
   });
 
   const openAdd = (key: string) => {
@@ -119,6 +128,15 @@ export const TripPlanner = ({ tripId, startDate, endDate, currentUserId, isOwner
 
   return (
     <div>
+      <div className="flex justify-end mb-3">
+        <button
+          onClick={() => setShowHistory(true)}
+          className="flex items-center gap-1.5 text-sm text-gray-600 hover:text-primary-600 px-3 py-1.5 rounded-lg hover:bg-gray-100 transition-colors"
+        >
+          <History size={15} /> Historique
+        </button>
+      </div>
+
       <div className="flex gap-4 overflow-x-auto pb-3 -mx-1 px-1">
         {days.map((d) => {
           const key = dayKey(d);
@@ -211,6 +229,10 @@ export const TripPlanner = ({ tripId, startDate, endDate, currentUserId, isOwner
           </div>
         </div>
       </Modal>
+
+      <AnimatePresence>
+        {showHistory && <PlannerHistory tripId={tripId} onClose={() => setShowHistory(false)} />}
+      </AnimatePresence>
     </div>
   );
 };
