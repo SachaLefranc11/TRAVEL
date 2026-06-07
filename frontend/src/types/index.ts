@@ -146,6 +146,16 @@ export interface PlannerLog {
   user: Pick<User, 'id' | 'name' | 'avatar'>;
 }
 
+export interface Notification {
+  id: string;
+  userId: string;
+  type: 'EXPENSE' | 'PLANNER' | 'INVITE';
+  message: string;
+  tripId?: string | null;
+  read: boolean;
+  createdAt: string;
+}
+
 export interface AuthResponse {
   token: string;
   user: User;

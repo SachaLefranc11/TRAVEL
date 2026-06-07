@@ -4,6 +4,7 @@ import cors from 'cors';
 import authRoutes from './routes/auth.routes';
 import tripsRoutes from './routes/trips.routes';
 import aiRoutes from './routes/ai.routes';
+import notificationsRoutes from './routes/notifications.routes';
 
 const app = express();
 
@@ -33,6 +34,7 @@ app.get('/health', (_req, res) => res.json({ status: 'ok', env: process.env.NODE
 app.use('/api/auth', authRoutes);
 app.use('/api/trips', tripsRoutes);
 app.use('/api/ai', aiRoutes);
+app.use('/api/notifications', notificationsRoutes);
 
 // Gestionnaire d'erreurs global
 app.use((err: Error, _req: express.Request, res: express.Response, _next: express.NextFunction) => {

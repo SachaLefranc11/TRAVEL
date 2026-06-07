@@ -1,6 +1,7 @@
 import { Response } from 'express';
 import prisma from '../services/prisma.service';
 import { AuthRequest } from '../middleware/auth.middleware';
+import { notify } from '../services/notifications.service';
 
 const userSelect = { id: true, name: true, email: true, avatar: true };
 
@@ -12,7 +13,7 @@ export const inviteParticipant = async (req: AuthRequest, res: Response) => {
   const tripId = req.params.tripId as string;
   const { email } = req.body;
 
-  const trip = await prisma.trip.findUnique({ where: { id: tripId }, select: { ownerId: true } });
+  const trip = await prisma.trip.findUnique({ where: { id: tripId }, select: { ownerId: true, title: true } });
   if (!trip) { res.status(404).json({ error: 'Voyage introuvable' }); return; }
   if (trip.ownerId !== req.userId) {
     res.status(403).json({ error: "Seul l'organisateur peut inviter des participants." }); return;
@@ -35,6 +36,13 @@ export const inviteParticipant = async (req: AuthRequest, res: Response) => {
     data: { userId: user.id, tripId, role: 'MEMBER' },
     include: { user: { select: userSelect } },
   });
+
+  await notify([user.id], {
+    type: 'INVITE',
+    message: `Vous avez été invité au voyage « ${trip.title} »`,
+    tripId,
+  });
+
   res.status(201).json(participant);
 };
 
