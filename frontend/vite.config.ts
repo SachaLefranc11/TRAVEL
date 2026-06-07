@@ -46,4 +46,17 @@ export default defineConfig({
       },
     }),
   ],
+  build: {
+    rollupOptions: {
+      output: {
+        // Vendors lourds isolés dans leurs propres chunks (chargés à la demande + bien cachés)
+        manualChunks: {
+          'react-vendor': ['react', 'react-dom', 'react-router-dom'],
+          leaflet: ['leaflet'],
+          recharts: ['recharts'],
+          motion: ['framer-motion'],
+        },
+      },
+    },
+  },
 })
