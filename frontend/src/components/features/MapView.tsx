@@ -334,7 +334,13 @@ export const MapView = ({ locations, destination, onAdd, onDelete, canEdit, trip
         {showFullscreen && (
           <FullscreenMap
             locations={locations}
+            positions={positions}
             destination={destination}
+            currentUserId={currentUserId}
+            canEdit={canEdit}
+            sharing={sharing}
+            onToggleSharing={toggleSharing}
+            onMapClick={canEdit ? (coords) => { setClickCoords(coords); setShowAdd(true); } : undefined}
             onClose={() => setShowFullscreen(false)}
           />
         )}
